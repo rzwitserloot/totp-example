@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Login to the TOTP example!</title>
+	</head>
+	<body>
+		<a href="/signup">Sign up for an account</a>
+		<p>
+		Or log in using an existing account
+		<form action="/verify-totp" method="POST">
+			<input placeholder="username" /><br />
+			<input placeholder="password" type="password" /><br />
+			<input type="submit" value="Next" />
+		</form>
+	</body>
+</html>
