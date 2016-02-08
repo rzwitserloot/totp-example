@@ -29,6 +29,7 @@ public class TotpExample {
 		Configuration templateConfiguration = createTemplateConfiguration();
 		context.addServlet(new ServletHolder(new LoginServlet(templateConfiguration)), "/login");
 		context.addServlet(new ServletHolder(new SignupServlet(templateConfiguration)), "/signup");
+		context.addServlet(new ServletHolder(new QrServlet()), "/qrcode");
 		server.setHandler(context);
 		
 		server.start();
@@ -39,7 +40,9 @@ public class TotpExample {
 		Configuration cfg = new Configuration(Configuration.VERSION_2_3_23);
 		cfg.setClassLoaderForTemplateLoading(TotpExample.class.getClassLoader(), TotpExample.class.getPackage().getName().replace(".", "/"));
 		cfg.setDefaultEncoding("UTF-8");
-		cfg.setTemplateExceptionHandler(TemplateExceptionHandler.HTML_DEBUG_HANDLER); // SECURITY NOTE: You should use the TemplateExceptionHandler.RETHROW_HANDLER in production.
+		
+		// SECURITY NOTE: You should use the TemplateExceptionHandler.RETHROW_HANDLER in production.
+		cfg.setTemplateExceptionHandler(TemplateExceptionHandler.HTML_DEBUG_HANDLER);
 		return cfg;
 	}
 }
