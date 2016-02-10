@@ -4,6 +4,11 @@
 		<title>Signup to the TOTP example!</title>
 	</head>
 	<body>
+		<#if errMsg??>
+			<div class="errorBox">
+				${errMsg?html}
+			</div>
+		</#if>
 		Sign up for a new account for the TOTP example project.
 		<p>
 		Normally you'd ask for various interesting tidbits here, and you might want to add a <a href="https://en.wikipedia.org/wiki/CAPTCHA">CAPTCHA</a> and/or email validation.
@@ -11,9 +16,9 @@
 		For this example all we really need is a username and password. We'll get to setting up the TOTP on the next page.
 		<p>
 		<form action="/setup-totp" method="POST">
-			<input placeholder="username" /><br />
-			<input placeholder="password" type="password" /><br />
-			<input placeholder="repeat password" type="password" /><br />
+			<input name="username" placeholder="username" /><br />
+			<input name="password" placeholder="password" type="password" /><br />
+			<input name="password2" placeholder="repeat password" type="password" /><br />
 			<input type="submit" value="Next" />
 		</form>
 	</body>
