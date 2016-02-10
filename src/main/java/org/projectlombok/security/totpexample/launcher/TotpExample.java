@@ -1,8 +1,16 @@
-package org.projectlombok.security.totpexample;
+package org.projectlombok.security.totpexample.launcher;
 
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
+import org.projectlombok.security.totpexample.Crypto;
+import org.projectlombok.security.totpexample.SessionStore;
+import org.projectlombok.security.totpexample.TemplatesHome;
+import org.projectlombok.security.totpexample.impl.DbBasedSessionStore;
+import org.projectlombok.security.totpexample.servlets.LoginServlet;
+import org.projectlombok.security.totpexample.servlets.QrServlet;
+import org.projectlombok.security.totpexample.servlets.SetupTotpServlet;
+import org.projectlombok.security.totpexample.servlets.SignupServlet;
 
 import freemarker.template.Configuration;
 import freemarker.template.TemplateExceptionHandler;
@@ -26,9 +34,14 @@ public class TotpExample {
 		Server server = new Server(8837);
 		ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
 		context.setContextPath("/");
-		Configuration templateConfiguration = createTemplateConfiguration();
-		context.addServlet(new ServletHolder(new LoginServlet(templateConfiguration)), "/login");
-		context.addServlet(new ServletHolder(new SignupServlet(templateConfiguration)), "/signup");
+		
+		Crypto crypto = new Crypto();
+		Configuration templates = createTemplateConfiguration();
+		SessionStore sessions = createSessionStore(crypto);
+		
+		context.addServlet(new ServletHolder(new LoginServlet(templates)), "/login");
+		context.addServlet(new ServletHolder(new SignupServlet(templates, sessions)), "/signup");
+		context.addServlet(new ServletHolder(new SetupTotpServlet(templates, sessions)), "/setup-totp");
 		context.addServlet(new ServletHolder(new QrServlet()), "/qrcode");
 		server.setHandler(context);
 		
@@ -36,9 +49,13 @@ public class TotpExample {
 		server.join();
 	}
 	
+	private static SessionStore createSessionStore(Crypto crypto) {
+		return new DbBasedSessionStore(crypto);
+	}
+	
 	private static Configuration createTemplateConfiguration() {
 		Configuration cfg = new Configuration(Configuration.VERSION_2_3_23);
-		cfg.setClassLoaderForTemplateLoading(TotpExample.class.getClassLoader(), TotpExample.class.getPackage().getName().replace(".", "/"));
+		cfg.setClassLoaderForTemplateLoading(TotpExample.class.getClassLoader(), TemplatesHome.class.getPackage().getName().replace(".", "/"));
 		cfg.setDefaultEncoding("UTF-8");
 		
 		// SECURITY NOTE: You should use the TemplateExceptionHandler.RETHROW_HANDLER in production.

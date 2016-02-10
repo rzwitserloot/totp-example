@@ -1,4 +1,4 @@
-package org.projectlombok.security.totpexample;
+package org.projectlombok.security.totpexample.servlets;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -16,9 +16,7 @@ import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 
 public class QrServlet extends HttpServlet {
-	
 	@Override protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-		
 		byte[] qrCodeImage = generateQrCodeForUri("https://projectlombok.org/");
 		
 		response.setContentType("image/png");
