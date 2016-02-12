@@ -9,6 +9,9 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.projectlombok.security.totpexample.Session;
+import org.projectlombok.security.totpexample.SessionStore;
+
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
@@ -16,8 +19,16 @@ import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 
 public class QrServlet extends HttpServlet {
+	
+	private final SessionStore sessions;
+	
+	public QrServlet(SessionStore sessions) {
+		this.sessions = sessions;
+	}	
+	
 	@Override protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-		byte[] qrCodeImage = generateQrCodeForUri("https://projectlombok.org/");
+		Session session = sessions.get(request.getParameter("key"));
+		byte[] qrCodeImage = generateQrCodeForUri(session.getOrDefault("uri", "https://www.google.com/search?tbm=isch&q=failed"));
 		
 		response.setContentType("image/png");
 		
@@ -28,7 +39,7 @@ public class QrServlet extends HttpServlet {
 			out.write(qrCodeImage);
 		}
 	}
-
+	
 	private byte[] generateQrCodeForUri(String uri) {
 		try {
 			ByteArrayOutputStream stream = new ByteArrayOutputStream();
