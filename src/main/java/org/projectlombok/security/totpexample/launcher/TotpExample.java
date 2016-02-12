@@ -7,6 +7,7 @@ import org.projectlombok.security.totpexample.Crypto;
 import org.projectlombok.security.totpexample.SessionStore;
 import org.projectlombok.security.totpexample.TemplatesHome;
 import org.projectlombok.security.totpexample.impl.DbBasedSessionStore;
+import org.projectlombok.security.totpexample.servlets.ConfirmTotpServlet;
 import org.projectlombok.security.totpexample.servlets.LoginServlet;
 import org.projectlombok.security.totpexample.servlets.QrServlet;
 import org.projectlombok.security.totpexample.servlets.SetupTotpServlet;
@@ -41,8 +42,9 @@ public class TotpExample {
 		
 		context.addServlet(new ServletHolder(new LoginServlet(templates)), "/login");
 		context.addServlet(new ServletHolder(new SignupServlet(templates, sessions)), "/signup");
-		context.addServlet(new ServletHolder(new SetupTotpServlet(templates, sessions)), "/setup-totp");
-		context.addServlet(new ServletHolder(new QrServlet()), "/qrcode");
+		context.addServlet(new ServletHolder(new SetupTotpServlet(templates, sessions, crypto)), "/setup-totp");
+		context.addServlet(new ServletHolder(new ConfirmTotpServlet(templates, sessions)), "/confirm-totp");
+		context.addServlet(new ServletHolder(new QrServlet(sessions)), "/qrcode");
 		server.setHandler(context);
 		
 		server.start();

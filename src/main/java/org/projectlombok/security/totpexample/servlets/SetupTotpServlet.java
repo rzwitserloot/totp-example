@@ -1,6 +1,9 @@
 package org.projectlombok.security.totpexample.servlets;
 
 import java.io.IOException;
+import java.io.Writer;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import javax.servlet.ServletException;
@@ -8,22 +11,31 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.projectlombok.security.totpexample.Crypto;
 import org.projectlombok.security.totpexample.Session;
 import org.projectlombok.security.totpexample.SessionStore;
+import org.projectlombok.security.totpexample.Totp;
 
 import freemarker.template.Configuration;
 import freemarker.template.Template;
+import freemarker.template.TemplateException;
 
 public class SetupTotpServlet extends HttpServlet {
 	// SECURITY NOTE: TODO - explain this in some more detail.
-	private static final long DEFAULT_EXPIRY = TimeUnit.MINUTES.toMillis(30);
+	private static final long DEFAULT_TIME_TO_LIVE = TimeUnit.MINUTES.toMillis(30);
 	private final SessionStore sessions;
 	private final Template setupTotpTemplate;
+	private final Crypto crypto;
 	
-	public SetupTotpServlet(Configuration templates, SessionStore sessions) throws IOException {
-//		this.setupTotpTemplate = templates.getTemplate("setupTotp.html");
-		this.setupTotpTemplate = null; // TOTP
+	public SetupTotpServlet(Configuration templates, SessionStore sessions, Crypto crypto) throws IOException {
+		this.setupTotpTemplate = templates.getTemplate("setupTotp.html");
 		this.sessions = sessions;
+		this.crypto = crypto;
+	}
+	
+	@Override protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+		Session session = sessions.get(request.getParameter("err"));
+		renderPage(response, session);
 	}
 	
 	@Override protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -68,10 +80,35 @@ public class SetupTotpServlet extends HttpServlet {
 			error(request, response, "Passwords need to be at least 8 characters long.");
 			return;
 		}
+		String secret = Totp.newSecret(crypto);
+		String totpUri = Totp.fromString(secret).toUri(username, "totp demo app");
+		Session session = sessions.create(DEFAULT_TIME_TO_LIVE);
+		session.put("secret", secret);
+		session.put("uri", totpUri);
+		session.put("username", username);
+		
+		renderPage(response, session);
+	}
+
+	private void renderPage(HttpServletResponse response, Session session) throws IOException, ServletException {
+		Map<String, Object> root = new HashMap<>();
+		root.put("uri", session.getOrDefault("uri", ""));
+		String error = session.getOrDefault("err", "");
+		if (error.isEmpty()) {
+			root.put("errMsg", error);
+		}
+		root.put("key", session.getSessionKey());
+		
+		response.setContentType("text/html; charset=UTF-8");
+		try (Writer out = response.getWriter()) {
+			setupTotpTemplate.process(root, out);
+		} catch (TemplateException e) {
+			throw new ServletException("Template broken: setupTotp.html", e);
+		}
 	}
 	
 	private void error(HttpServletRequest request, HttpServletResponse response, String message) throws ServletException, IOException {
-		Session session = sessions.create(System.currentTimeMillis() + DEFAULT_EXPIRY);
+		Session session = sessions.create(DEFAULT_TIME_TO_LIVE);
 		session.put("errMsg", message);
 		response.sendRedirect("/signup?err=" + session.getSessionKey());
 	}
