@@ -32,7 +32,8 @@ public class DbBasedSessionStore implements SessionStore {
 		return connection;
 	}
 	
-	@Override public Session create(long expiresAt) {
+	@Override public Session create(long ttl) {
+		long expiresAt = System.currentTimeMillis() + ttl;
 		String sessionKey = crypto.generateRandomKey(12);
 		try (Connection connection = createConnection()) {
 			ensureSessionTables(connection);
