@@ -83,7 +83,7 @@ public final class Totp {
 			truncatedHash = (truncatedHash << 8) | (hashedTimestamp[offset + i] & 0xff);
 		}
 		
-		truncatedHash = (truncatedHash & 0x7fff_fff) % 1_000_000;
+		truncatedHash = (truncatedHash & 0x7fff_ffff) % 1_000_000;
 		return (int) truncatedHash;
 	}
 	
