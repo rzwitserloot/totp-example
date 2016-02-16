@@ -22,4 +22,14 @@ public final class Crypto {
 		}
 		return new String(out);
 	}
+	
+	public String hashPassword(char[] password) {
+		byte[] salt = new byte[16];
+		random.nextBytes(salt);
+		return BCrypt.generate(password, salt, 10);
+	}
+	
+	public boolean verifyPassword(String hash, char[] password) {
+		return BCrypt.checkPassword(hash, password);
+	}
 }
