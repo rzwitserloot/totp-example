@@ -11,6 +11,7 @@ import javax.servlet.http.HttpServletResponse;
 
 import org.projectlombok.security.totpexample.Session;
 import org.projectlombok.security.totpexample.SessionStore;
+import org.projectlombok.security.totpexample.Totp;
 
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
@@ -28,7 +29,7 @@ public class QrServlet extends HttpServlet {
 	
 	@Override protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
 		Session session = sessions.get(request.getParameter("key"));
-		byte[] qrCodeImage = generateQrCodeForUri(session.getOrDefault("uri", "https://www.google.com/search?tbm=isch&q=failed"));
+		byte[] qrCodeImage = generateQrCodeForUri(session.getOrDefault(Totp.SESSIONKEY_URI, "https://www.google.com/search?tbm=isch&q=failed"));
 		
 		response.setContentType("image/png");
 		

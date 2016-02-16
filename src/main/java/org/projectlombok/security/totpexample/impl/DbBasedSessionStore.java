@@ -32,28 +32,6 @@ public class DbBasedSessionStore implements SessionStore {
 		return connection;
 	}
 	
-	@Override public Session create(long ttl) {
-		long expiresAt = System.currentTimeMillis() + ttl;
-		String sessionKey = crypto.generateRandomKey(12);
-		try (Connection connection = createConnection()) {
-			ensureSessionTables(connection);
-			try (PreparedStatement s = connection.prepareStatement("insert into SESSIONSTORE (KEY, EXPIRES) values (?, ?);", Statement.RETURN_GENERATED_KEYS)) {
-				s.setString(1, sessionKey);
-				s.setTimestamp(2, new Timestamp(expiresAt));
-				s.executeUpdate();
-				try (ResultSet result = s.getGeneratedKeys()) {
-					result.next();
-					int id = result.getInt(1);
-					result.close();
-					connection.commit();
-					return new DbBasedSession(this, id, sessionKey);
-				}
-			}
-		} catch (SQLException e) {
-			throw new SessionStoreException(e);
-		}
-	}
-	
 	private void ensureSessionTables(Connection connection) throws SQLException {
 		DatabaseMetaData meta = connection.getMetaData();
 		boolean available;
@@ -86,6 +64,28 @@ public class DbBasedSessionStore implements SessionStore {
 			}
 		}
 		connection.commit();
+	}
+	
+	@Override public Session create(long ttl) {
+		long expiresAt = System.currentTimeMillis() + ttl;
+		String sessionKey = crypto.generateRandomKey(12);
+		try (Connection connection = createConnection()) {
+			ensureSessionTables(connection);
+			try (PreparedStatement s = connection.prepareStatement("insert into SESSIONSTORE (KEY, EXPIRES) values (?, ?);", Statement.RETURN_GENERATED_KEYS)) {
+				s.setString(1, sessionKey);
+				s.setTimestamp(2, new Timestamp(expiresAt));
+				s.executeUpdate();
+				try (ResultSet result = s.getGeneratedKeys()) {
+					result.next();
+					int id = result.getInt(1);
+					result.close();
+					connection.commit();
+					return new DbBasedSession(this, id, sessionKey);
+				}
+			}
+		} catch (SQLException e) {
+			throw new SessionStoreException(e);
+		}
 	}
 	
 	@Override public Session get(String sessionKey) {

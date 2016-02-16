@@ -11,7 +11,6 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import org.projectlombok.security.totpexample.Crypto;
 import org.projectlombok.security.totpexample.Session;
 import org.projectlombok.security.totpexample.SessionStore;
 import org.projectlombok.security.totpexample.Totp;
@@ -23,14 +22,15 @@ import freemarker.template.TemplateException;
 public class SetupTotpServlet extends HttpServlet {
 	// SECURITY NOTE: TODO - explain this in some more detail.
 	private static final long DEFAULT_TIME_TO_LIVE = TimeUnit.MINUTES.toMillis(30);
+	
 	private final SessionStore sessions;
 	private final Template setupTotpTemplate;
-	private final Crypto crypto;
+	private final Totp totp;
 	
-	public SetupTotpServlet(Configuration templates, SessionStore sessions, Crypto crypto) throws IOException {
+	public SetupTotpServlet(Configuration templates, SessionStore sessions, Totp totp) throws IOException {
 		this.setupTotpTemplate = templates.getTemplate("setupTotp.html");
 		this.sessions = sessions;
-		this.crypto = crypto;
+		this.totp = totp;
 	}
 	
 	@Override protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -80,24 +80,21 @@ public class SetupTotpServlet extends HttpServlet {
 			error(request, response, "Passwords need to be at least 8 characters long.");
 			return;
 		}
-		String secret = Totp.newSecret(crypto);
-		String totpUri = Totp.fromString(secret).toUri(username, "totp demo app");
-		Session session = sessions.create(DEFAULT_TIME_TO_LIVE);
-		session.put("secret", secret);
-		session.put("uri", totpUri);
-		session.put("username", username);
 		
+		Session session = totp.startSetupTotp(username, "TOTP demo app");
+		session.put("password", password);
 		renderPage(response, session);
 	}
-
+	
 	private void renderPage(HttpServletResponse response, Session session) throws IOException, ServletException {
 		Map<String, Object> root = new HashMap<>();
-		root.put("uri", session.getOrDefault("uri", ""));
+		root.put("uri", session.getOrDefault(Totp.SESSIONKEY_URI, null));
+		root.put("key", session.getSessionKey());
+		root.put("secret", session.getOrDefault(Totp.SESSIONKEY_SECRET, null));
 		String error = session.getOrDefault("err", "");
-		if (error.isEmpty()) {
+		if (!error.isEmpty()) {
 			root.put("errMsg", error);
 		}
-		root.put("key", session.getSessionKey());
 		
 		response.setContentType("text/html; charset=UTF-8");
 		try (Writer out = response.getWriter()) {

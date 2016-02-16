@@ -2,64 +2,199 @@ package org.projectlombok.security.totpexample;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
-import java.security.GeneralSecurityException;
+import java.security.InvalidKeyException;
 import java.security.Key;
+import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
 public final class Totp {
-	
+	public static final String SESSIONKEY_USERNAME = "totpUsername";
+	public static final String SESSIONKEY_URI = "totpUri";
+	public static final String SESSIONKEY_SECRET = "totpSecret";
 	private static final long KEY_VALIDATION_WINDOW = TimeUnit.SECONDS.toMillis(30);
-	private static final int TIMESKEW = 2;
-	private static final Pattern SECRET_PATTERN = Pattern.compile("[a-z2-7]*", Pattern.CASE_INSENSITIVE);
+	private static final long[] DELTAS;
+	private static final TotpResult[] ACTION;
+	
+	static {
+		long[] d = new long[11];
+		TotpResult[] t = new TotpResult[11];
+		int o = 0;
+		for (int i = 0; i < 3; i++) {
+			d[o] = i;
+			t[o++] = TotpResult.SUCCESS;
+		}
+		for (int i = 3; i < 6; i++) {
+			d[o] = i;
+			t[o++] = TotpResult.CLOCK_MISMATCH_NEARBY;
+		}
+		for (int i = 118; i < 123; i++) {
+			d[o] = i;
+			t[o++] = TotpResult.CLOCK_MISMATCH_DST;
+		}
+		DELTAS = d;
+		ACTION = t;
+	}
+	
 	private static final String BASE32CHARS = "abcdefghijklmnopqrstuvwxyz234567";
+	private static final long SETUP_PROCEDURE_TTL = TimeUnit.HOURS.toMillis(1);
+	private static final int LOCKOUT_LIMIT = 5;
 	
-	public enum VerifyResult {
-		FAILED,
-		ALREADY_USED,
-		VERIFIED
+	private final UserStore users;
+	private final SessionStore sessions;
+	private final Crypto crypto;
+	
+	public Totp(UserStore users, SessionStore sessions, Crypto crypto) {
+		this.users = users;
+		this.sessions = sessions;
+		this.crypto = crypto;
 	}
 	
-	private final String secret;
-	
-	public static String newSecret(Crypto crypto) {
-		return crypto.generate(BASE32CHARS, 16);
+	public static final class TotpData {
+		private final String secret;
+		private final int failureCount;
+		private final long lastSuccessfulTick;
+		
+		public TotpData(String secret, int failureCount, long lastSuccessfulTick) {
+			this.secret = secret;
+			this.failureCount = failureCount;
+			this.lastSuccessfulTick = lastSuccessfulTick;
+		}
+		
+		public int getFailureCount() {
+			return failureCount;
+		}
+		
+		public String getSecret() {
+			return secret;
+		}
+		
+		public long getLastSuccessfulTick() {
+			return lastSuccessfulTick;
+		}
 	}
 	
-	public static Totp fromString(String secret) {
-		if (secret == null) throw new NullPointerException("secret");
-		if (secret.length() != 16) throw new IllegalArgumentException("wrong length secret, expected 16 characters, got " + secret.length());
-		if (!SECRET_PATTERN.matcher(secret).matches()) throw new IllegalArgumentException("non-base32 characters in secret");
-		return new Totp(secret.toLowerCase());
+	private final class CodeVerification {
+		TotpResult result;
+		long tick;
+		
+		CodeVerification(TotpResult result, long tick) {
+			this.result = result;
+			this.tick = tick;
+		}
 	}
 	
-	private Totp(String secret) {
-		this.secret = secret;
+	public enum TotpResult {
+		SUCCESS,
+		ALREADY_LOCKED_OUT,
+		NOW_LOCKED_OUT,
+		CLOCK_MISMATCH_NEARBY,
+		CLOCK_MISMATCH_DST,
+		CODE_VERIFICATION_FAILURE,
+		CODE_ALREADY_USED,
+		SESSION_EXPIRED,
+		INVALID_INPUT;
+		
+		public boolean isSuccess() {
+			return this == SUCCESS;
+		}
+		
+		public boolean isLockedOut() {
+			return this == ALREADY_LOCKED_OUT || this == NOW_LOCKED_OUT;
+		}
+		
+		public boolean isCodeVerificationFailure() {
+			return this == CLOCK_MISMATCH_NEARBY || this == CLOCK_MISMATCH_DST || this == TotpResult.CODE_VERIFICATION_FAILURE || this == NOW_LOCKED_OUT;
+		}
 	}
 	
-	public String toUri(String username, String application) {
+	/**
+	 * Generates a new TOTP key pair for the given user.
+	 */
+	public Session startSetupTotp(String username, String applicationName) {
+		String secret = crypto.generate(BASE32CHARS, 16);
+		Session session = sessions.create(SETUP_PROCEDURE_TTL);
+		String uri = toUri(username, applicationName, secret);
+		session.put(SESSIONKEY_SECRET, secret);
+		session.put(SESSIONKEY_URI, uri);
+		session.put(SESSIONKEY_USERNAME, username);
+		return session;
+	}
+	
+	public TotpResult finishSetupTotp(Session session, String verificationCode) {
+		if (session == null) return TotpResult.SESSION_EXPIRED;
+		String secret = session.getOrDefault(SESSIONKEY_SECRET, null);
+		String username = session.getOrDefault(SESSIONKEY_USERNAME, null);
+		if (secret == null || username == null) throw new TotpException("TOTP setup process not started");
+		CodeVerification result = verifyCode(secret, verificationCode, 0L);
+		if (result.result == TotpResult.SUCCESS) {
+			// TODO review all these session.getOrDefaults; I'd really just rather do a getAndItNeedsToBeThere kind of call here. It should be, but bad stuff happens if this password isn't in here.
+			String password = session.getOrDefault("password", null);
+			users.createUserWithTotp(username, password, secret, result.tick - 1);
+		}
+		return result.result;
+	}
+	
+	/**
+	 * TODO SECURITY: Do *NOT* give any feedback on the TotpStatus of any user unless they have already entered the correct password.
+	 */
+	public TotpData startCheckTotp(String username) {
+		return users.getTotpData(username);
+	}
+	
+	/**
+	 * @param sessionKey A session started with {@link #startCheckTotp(String)}.
+	 */
+	public TotpResult finishCheckTotp(String sessionKey, String verificationCode) {
+		Session session = sessions.get(sessionKey);
+		if (session == null) throw new TotpException("Session expired / nonexistent");
+		String username = session.getOrDefault("username", null);
+		TotpData userData = users.getTotpData(username);
+		if (userData.getFailureCount() >= LOCKOUT_LIMIT) return TotpResult.ALREADY_LOCKED_OUT;
+		CodeVerification result = verifyCode(userData.getSecret(), verificationCode, userData.getLastSuccessfulTick());
+		if (result.result == TotpResult.SUCCESS) {
+			users.updateLastSuccessfulTickAndClearFailureCount(username, result.tick);
+			return result.result;
+		}
+		
+		if (result.result.isCodeVerificationFailure()) {
+			if (users.incrementFailureCount(username) >= LOCKOUT_LIMIT) return TotpResult.NOW_LOCKED_OUT;
+			return result.result;
+		}
+		
+		return result.result;
+	}
+	
+	private static String toUri(String username, String application, String secret) {
 		String app = urlSafe(application);
 		String user = urlSafe(username);
 		return String.format("otpauth://totp/%s:%s?secret=%s&issuer=%1$s", app, user, secret);
 	}
 	
-	public VerifyResult verify(String verificationCode, String key, boolean trackAttempts) throws GeneralSecurityException {
-		byte[] secretBytes = toBytes();
-		long normalizedTime = System.currentTimeMillis() / KEY_VALIDATION_WINDOW;
+	private CodeVerification verifyCode(String secret, String verificationCode, long lastSuccessfulTick) {
+		byte[] secretBytes = toBytes(secret);
+		long tick = System.currentTimeMillis() / KEY_VALIDATION_WINDOW;
 		
-		VerifyResult result = VerifyResult.FAILED;
-		
-		for (long i = normalizedTime - TIMESKEW; i <= normalizedTime + TIMESKEW; i++) {
-			int hash = calculateCode(secretBytes, i);
-			if (String.format("%06d", hash).equals(verificationCode)) {
-				if (trackAttempts && !alreadyUsedScan(key, i, normalizedTime - TIMESKEW)) result = VerifyResult.ALREADY_USED;
-				else result = VerifyResult.VERIFIED;
+		for (int i = 0; i < DELTAS.length; i++) {
+			long d = DELTAS[i];
+			
+			long t = tick + d;
+			if (calculateCode(secretBytes, t).equals(verificationCode)) {
+				if (t <= lastSuccessfulTick) return new CodeVerification(TotpResult.CODE_ALREADY_USED, t);
+				return new CodeVerification(ACTION[i], t);
+			}
+			if (d != 0) {
+				t = tick - d;
+				if (calculateCode(secretBytes, t).equals(verificationCode)) {
+					if (t <= lastSuccessfulTick) return new CodeVerification(TotpResult.CODE_ALREADY_USED, t);
+					return new CodeVerification(ACTION[i], t);
+				}
 			}
 		}
-		return result;
+		
+		return new CodeVerification(TotpResult.CODE_VERIFICATION_FAILURE, 0L);
 	}
 	
 	private static String urlSafe(String value) {
@@ -71,10 +206,18 @@ public final class Totp {
 		}
 	}
 	
-	private static int calculateCode(byte[] secret, long time) throws GeneralSecurityException {
+	private static String calculateCode(byte[] secret, long time) {
 		Key keySpec = new SecretKeySpec(secret, "HmacSHA1");
-		Mac mac = Mac.getInstance("HmacSHA1");
-		mac.init(keySpec);
+		Mac mac;
+		try {
+			mac = Mac.getInstance("HmacSHA1");
+			mac.init(keySpec);
+		} catch (NoSuchAlgorithmException e) {
+			// TODO review what kind of exception this should be.
+			throw new InternalError("HmacSHA1 algorithm is not available; check your JVM security settings, they may have been restricted");
+		} catch (InvalidKeyException e) {
+			throw new TotpException("Invalid secret");
+		}
 		byte[] hashedTimestamp = mac.doFinal(bigEndian(time));
 		int offset = hashedTimestamp[19] & 0xF;
 		long truncatedHash = 0L;
@@ -84,11 +227,7 @@ public final class Totp {
 		}
 		
 		truncatedHash = (truncatedHash & 0x7fff_ffff) % 1_000_000;
-		return (int) truncatedHash;
-	}
-	
-	private static boolean alreadyUsedScan(String key, long i, long l) {
-		return false;
+		return String.format("%06d", truncatedHash);
 	}
 	
 	private static byte[] bigEndian(long value) {
@@ -100,14 +239,14 @@ public final class Totp {
 		return bytes;
 	}
 	
-	private byte[] toBytes() {
+	private static byte[] toBytes(String secret) {
 		byte[] result = new byte[10];
-		decode32(result, 0, 0);
-		decode32(result, 8, 5);
+		decode32(secret, result, 0, 0);
+		decode32(secret, result, 8, 5);
 		return result;
 	}
 	
-	private void decode32(byte[] bytes, int secretOffset, int byteOffset) {
+	private static void decode32(String secret, byte[] bytes, int secretOffset, int byteOffset) {
 		int[] values = new int[8];
 		for (int i = 0; i < 8; i++) {
 			values[i] = BASE32CHARS.indexOf(secret.charAt(i + secretOffset));

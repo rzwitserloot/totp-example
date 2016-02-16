@@ -6,7 +6,10 @@ import org.eclipse.jetty.servlet.ServletHolder;
 import org.projectlombok.security.totpexample.Crypto;
 import org.projectlombok.security.totpexample.SessionStore;
 import org.projectlombok.security.totpexample.TemplatesHome;
+import org.projectlombok.security.totpexample.Totp;
+import org.projectlombok.security.totpexample.UserStore;
 import org.projectlombok.security.totpexample.impl.DbBasedSessionStore;
+import org.projectlombok.security.totpexample.impl.DbBasedUserStore;
 import org.projectlombok.security.totpexample.servlets.ConfirmTotpServlet;
 import org.projectlombok.security.totpexample.servlets.LoginServlet;
 import org.projectlombok.security.totpexample.servlets.QrServlet;
@@ -39,11 +42,13 @@ public class TotpExample {
 		Crypto crypto = new Crypto();
 		Configuration templates = createTemplateConfiguration();
 		SessionStore sessions = createSessionStore(crypto);
-		
+		UserStore users = createUserStore(crypto);
+		Totp totp = new Totp(users, sessions, crypto);
+
 		context.addServlet(new ServletHolder(new LoginServlet(templates)), "/login");
 		context.addServlet(new ServletHolder(new SignupServlet(templates, sessions)), "/signup");
-		context.addServlet(new ServletHolder(new SetupTotpServlet(templates, sessions, crypto)), "/setup-totp");
-		context.addServlet(new ServletHolder(new ConfirmTotpServlet(templates, sessions)), "/confirm-totp");
+		context.addServlet(new ServletHolder(new SetupTotpServlet(templates, sessions, totp)), "/setup-totp");
+		context.addServlet(new ServletHolder(new ConfirmTotpServlet(templates, sessions, totp)), "/confirm-totp");
 		context.addServlet(new ServletHolder(new QrServlet(sessions)), "/qrcode");
 		server.setHandler(context);
 		
@@ -53,6 +58,10 @@ public class TotpExample {
 	
 	private static SessionStore createSessionStore(Crypto crypto) {
 		return new DbBasedSessionStore(crypto);
+	}
+	
+	private static UserStore createUserStore(Crypto crypto) {
+		return new DbBasedUserStore(crypto);
 	}
 	
 	private static Configuration createTemplateConfiguration() {
