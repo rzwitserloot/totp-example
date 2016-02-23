@@ -13,6 +13,7 @@ import org.projectlombok.security.totpexample.impl.DbBasedUserStore;
 import org.projectlombok.security.totpexample.servlets.ConfirmTotpLoginServlet;
 import org.projectlombok.security.totpexample.servlets.ConfirmTotpSetupServlet;
 import org.projectlombok.security.totpexample.servlets.HomepageServlet;
+import org.projectlombok.security.totpexample.servlets.LoggedInUsersServlet;
 import org.projectlombok.security.totpexample.servlets.LoginServlet;
 import org.projectlombok.security.totpexample.servlets.QrServlet;
 import org.projectlombok.security.totpexample.servlets.SetupTotpServlet;
@@ -49,14 +50,15 @@ public class TotpExample {
 		Totp totp = new Totp(users, sessions, crypto);
 		
 		context.addServlet(new ServletHolder(new HomepageServlet(templates, sessions)), "/");
+		context.addServlet(new ServletHolder(new LoggedInUsersServlet(templates, users)), "/main");
 		
 		context.addServlet(new ServletHolder(new SignupServlet(templates, sessions)), "/signup");
 		context.addServlet(new ServletHolder(new SetupTotpServlet(templates, users, sessions, totp)), "/setup-totp");
-		context.addServlet(new ServletHolder(new ConfirmTotpSetupServlet(templates, sessions, totp)), "/confirm-totp-setup");
+		context.addServlet(new ServletHolder(new ConfirmTotpSetupServlet(users, sessions, totp)), "/confirm-totp-setup");
 		
 		context.addServlet(new ServletHolder(new LoginServlet(templates, sessions)), "/login");
 		context.addServlet(new ServletHolder(new VerifyTotpServlet(templates, users, sessions, totp)), "/verify-totp");
-		context.addServlet(new ServletHolder(new ConfirmTotpLoginServlet(templates, sessions, totp)), "/confirm-totp-login");
+		context.addServlet(new ServletHolder(new ConfirmTotpLoginServlet(users, sessions, totp)), "/confirm-totp-login");
 		
 		context.addServlet(new ServletHolder(new QrServlet(sessions)), "/qrcode");
 		server.setHandler(context);

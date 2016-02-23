@@ -8,6 +8,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Timestamp;
+import java.util.concurrent.TimeUnit;
 
 import org.projectlombok.security.totpexample.Crypto;
 import org.projectlombok.security.totpexample.UserStore;
@@ -15,6 +17,7 @@ import org.projectlombok.security.totpexample.UserStoreException;
 import org.projectlombok.security.totpexample.Totp.TotpData;
 
 public class DbBasedUserStore implements UserStore {
+	private static final long DEFAULT_USERSESSION_EXPIRY = TimeUnit.DAYS.toMillis(5);
 	private final Crypto crypto;
 	private final File dbDir = new File("./db");
 	
@@ -39,7 +42,7 @@ public class DbBasedUserStore implements UserStore {
 		
 		if (!available) {
 			try (Statement s = connection.createStatement()) {
-				// These could of course be a single table (integrate columns 'LASTTICK', 'FAILCOUNT', and 'SECRET' from TOTPSTORE into USERSTORE.
+				// USERSTORE+TOTPSTORE could of course be a single table (integrate columns 'LASTTICK', 'FAILCOUNT', and 'SECRET' from TOTPSTORE into USERSTORE).
 				// Here we use 2 tables, to show how to update an existing installation without modifying a table. This setup is also nice if you
 				// don't force every user to enable TOTP right away.
 				s.execute(
@@ -58,6 +61,17 @@ public class DbBasedUserStore implements UserStore {
 					"SECRET varchar not null, " +
 					"foreign key (USERNAME) references USERSTORE(USERNAME) on delete cascade" +
 					");");
+				
+				s.execute(
+					"create table USERSESSIONSTORE (" +
+					"ID int identity, " +
+					"USERID int not null, " +
+					"SESSIONKEY varchar not null, " +
+					"EXPIRES timestamp not null, " +
+					"foreign key (USERID) references USERSTORE(ID) on delete cascade" +
+					");");
+				
+				s.execute("create index on USERSESSIONSTORE(SESSIONKEY);");
 			}
 		}
 		connection.commit();
@@ -196,6 +210,57 @@ public class DbBasedUserStore implements UserStore {
 				}
 				connection.commit();
 				return lastFailCount + 1;
+			}
+		} catch (SQLException e) {
+			throw new UserStoreException(e);
+		}
+	}
+	
+	@Override public String createNewLongLivedSession(String username) {
+		try (Connection connection = createConnection()) {
+			ensureUserTables(connection);
+			try (
+				PreparedStatement findUserId = connection.prepareStatement("select ID from USERSTORE where USERNAME = ? limit 1;");
+				PreparedStatement addSessionKey = connection.prepareStatement("insert into USERSESSIONSTORE (USERID, SESSIONKEY, EXPIRES) values (?, ?, ?);")) {
+				
+				findUserId.setString(1, username);
+				Integer userId = null;
+				try (ResultSet results = findUserId.executeQuery()) {
+					if (results.next()) {
+						userId = results.getInt(1);
+					}
+				}
+				
+				if (userId == null) {
+					throw new UserStoreException("user does not exist: " + username);
+				}
+				addSessionKey.setInt(1, userId);
+				String sessionKey = crypto.generateRandomKey(32);
+				addSessionKey.setString(2, sessionKey);
+				addSessionKey.setTimestamp(3, new Timestamp(System.currentTimeMillis() + DEFAULT_USERSESSION_EXPIRY));
+				addSessionKey.executeUpdate();
+				connection.commit();
+				return sessionKey;
+			}
+		} catch (SQLException e) {
+			throw new UserStoreException(e);
+		}
+	}
+	
+	@Override public String getUserFromSessionKey(String sessionKey) {
+		try (Connection connection = createConnection()) {
+			ensureUserTables(connection);
+			String username = null;
+			try (PreparedStatement findName = connection.prepareStatement("select USERNAME from USERSESSIONSTORE inner join USERSTORE on USERSESSIONSTORE.USERID = USERSTORE.ID where SESSIONKEY = ? and EXPIRES >= ? limit 1;")) {
+				findName.setString(1, sessionKey);
+				findName.setTimestamp(2, new Timestamp(System.currentTimeMillis()));
+				try (ResultSet results = findName.executeQuery()) {
+					if (results.next()) {
+						username = results.getString(1);
+					}
+				}
+				connection.commit();
+				return username;
 			}
 		} catch (SQLException e) {
 			throw new UserStoreException(e);

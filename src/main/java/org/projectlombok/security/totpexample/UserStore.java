@@ -10,4 +10,7 @@ public interface UserStore {
 	void createUserWithTotp(String username, char[] password, String secret, long lastSuccessfulTick);
 	boolean userExists(String username);
 	boolean verifyPassword(String username, char[] password);
+	/** Return a long lived session id, generally intended to be stored via a cookie. */
+	String createNewLongLivedSession(String username);
+	String getUserFromSessionKey(String sessionKey);
 }

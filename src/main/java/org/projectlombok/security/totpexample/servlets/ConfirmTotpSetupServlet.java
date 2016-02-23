@@ -1,9 +1,6 @@
 package org.projectlombok.security.totpexample.servlets;
 
 import java.io.IOException;
-import java.io.Writer;
-import java.util.HashMap;
-import java.util.Map;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -14,19 +11,16 @@ import org.projectlombok.security.totpexample.Session;
 import org.projectlombok.security.totpexample.SessionStore;
 import org.projectlombok.security.totpexample.Totp;
 import org.projectlombok.security.totpexample.TotpException;
+import org.projectlombok.security.totpexample.UserStore;
 import org.projectlombok.security.totpexample.Totp.TotpResult;
 
-import freemarker.template.Configuration;
-import freemarker.template.Template;
-import freemarker.template.TemplateException;
-
 public class ConfirmTotpSetupServlet extends HttpServlet {
+	private final UserStore users;
 	private final SessionStore sessions;
-	private final Template confirmTotpSetupTemplate;
 	private final Totp totp;
 	
-	public ConfirmTotpSetupServlet(Configuration templates, SessionStore sessions, Totp totp) throws IOException {
-		this.confirmTotpSetupTemplate = templates.getTemplate("confirmTotpSetup.html");
+	public ConfirmTotpSetupServlet(UserStore users, SessionStore sessions, Totp totp) throws IOException {
+		this.users = users;
 		this.sessions = sessions;
 		this.totp = totp;
 	}
@@ -48,7 +42,8 @@ public class ConfirmTotpSetupServlet extends HttpServlet {
 		boolean hopeless;
 		switch (result) {
 		case SUCCESS:
-			renderPage(response);
+			String username = session.getOrDefault(Totp.SESSIONKEY_USERNAME, null);
+			finishSignup(response, username);
 			return;
 		case ALREADY_LOCKED_OUT:
 			message = "Due to repeated wrong verification code entry, this account was already locked out.";
@@ -98,13 +93,8 @@ public class ConfirmTotpSetupServlet extends HttpServlet {
 		}
 	}
 	
-	private void renderPage(HttpServletResponse response) throws ServletException, IOException {
-		Map<String, Object> root = new HashMap<>();
-		response.setContentType("text/html; charset=UTF-8");
-		try (Writer out = response.getWriter()) {
-			confirmTotpSetupTemplate.process(root, out);
-		} catch (TemplateException e) {
-			throw new ServletException("Template broken: confirmTotpSetup.html", e);
-		}
+	private void finishSignup(HttpServletResponse response, String username) throws ServletException, IOException {
+		ConfirmTotpLoginServlet.addSessionCookie(response, users, username);
+		response.sendRedirect("/main");
 	}
 }
