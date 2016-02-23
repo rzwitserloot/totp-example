@@ -20,13 +20,13 @@ import freemarker.template.Configuration;
 import freemarker.template.Template;
 import freemarker.template.TemplateException;
 
-public class ConfirmTotpServlet extends HttpServlet {
+public class ConfirmTotpLoginServlet extends HttpServlet {
 	private final SessionStore sessions;
-	private final Template confirmTotpTemplate;
+	private final Template confirmTotpLoginTemplate;
 	private final Totp totp;
 	
-	public ConfirmTotpServlet(Configuration templates, SessionStore sessions, Totp totp) throws IOException {
-		this.confirmTotpTemplate = templates.getTemplate("confirmTotp.html");
+	public ConfirmTotpLoginServlet(Configuration templates, SessionStore sessions, Totp totp) throws IOException {
+		this.confirmTotpLoginTemplate = templates.getTemplate("confirmTotpLogin.html");
 		this.sessions = sessions;
 		this.totp = totp;
 	}
@@ -38,7 +38,7 @@ public class ConfirmTotpServlet extends HttpServlet {
 		TotpResult result;
 		
 		try {
-			result = totp.finishSetupTotp(session, code);
+			result = totp.finishCheckTotp(session, code);
 		} catch (TotpException e) {
 			error(response, session, e.getMessage(), true);
 			return;
@@ -92,9 +92,9 @@ public class ConfirmTotpServlet extends HttpServlet {
 	private void error(HttpServletResponse response, Session session, String message, boolean hopeless) throws IOException {
 		session.put("errMsg", message);
 		if (hopeless) {
-			response.sendRedirect("/signup?err=" + session.getSessionKey());
+			response.sendRedirect("/login?err=" + session.getSessionKey());
 		} else {
-			response.sendRedirect("/setup-totp?err=" + session.getSessionKey());
+			response.sendRedirect("/verify-totp?err=" + session.getSessionKey());
 		}
 	}
 	
@@ -102,9 +102,9 @@ public class ConfirmTotpServlet extends HttpServlet {
 		Map<String, Object> root = new HashMap<>();
 		response.setContentType("text/html; charset=UTF-8");
 		try (Writer out = response.getWriter()) {
-			confirmTotpTemplate.process(root, out);
+			confirmTotpLoginTemplate.process(root, out);
 		} catch (TemplateException e) {
-			throw new ServletException("Template broken: setupTotp.html", e);
+			throw new ServletException("Template broken: confirmTotpLogin.html", e);
 		}
 	}
 }

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>The TOTP example homepage</title>
+	</head>
+	<body>
+		<#if userMsg??>
+			<div class="infoBox">
+				${userMsg?html}
+			</div>
+		</#if>
+		Imagine there's a really nice site here. It has some user authentication links:<br />
+		<a href="/signup">Sign up as a new user.</a><br />
+		<a href="/login">Log in as an existing user.</a><br />
+	</body>
+</html>

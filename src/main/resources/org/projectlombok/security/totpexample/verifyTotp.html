@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Verify TOTP</title>
+	</head>
+	<body>
+		<#if errMsg??>
+			<div class="errorBox">
+				${errMsg?html}
+			</div>
+		</#if>
+		<#if lockedOut>
+			Due to repeated wrong TOTP confirmation codes, your account has been locked out. Contact the site administrators for help.
+			<p>
+			<div class="demoNote">
+				In practice, you should take repeated TOTP confirmation failures very seriously, because that usually means someone is trying to
+				impersonate the account owner and <em>already knows their password</em>, but fails on the TOTP step. The TOTP step does not hold up
+				under repeated trying of codes, so you MUST put a stop to attempts at guessing for the TOTP step to add any meaningful security:
+				<strong>Blanket lockout is warranted.</strong>
+				<p>
+				If you need an automated way to clear this up, one solution is to ask for 4 consecutive TOTP codes. This eliminates the option that
+				the hacker can get past the TOTP phase by just guessing until they stumble on a right code by accident, which, after all, is a 1 in
+				200,000 shot; given enough tries they'll eventually hit.
+				<p>
+				If you have (automated or otherwise) ways to verify the identity of the account owner that are still valid even under the assumption that
+				their password has been compromised, now is the time to put them to good use. After a password change, the TOTP lockout can be reset, but not
+				until then. <strong>If the TOTP verification step is failed 5 times in a row, the password should be considered compromised</strong>.
+			</div>
+		<#else>
+			<p>
+			Enter the code displayed on your device to confirm your login.
+			<p>
+			<form action="/confirm-totp-login" method="POST">
+				<input name="code" placeholder="code" /><br />
+				<input type="hidden" name="key" value="${key}">
+				<input type="submit" value="Confirm" />
+			</form>
+		</#if>
+	</body>
+</html>

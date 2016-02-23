@@ -63,14 +63,54 @@ public class DbBasedUserStore implements UserStore {
 		connection.commit();
 	}
 	
-	@Override public void createUserWithTotp(String username, String password, String secret, long lastSuccessfulTick) {
+	@Override public boolean userExists(String username) {
+		boolean exists = false;
+		try (Connection connection = createConnection()) {
+			ensureUserTables(connection);
+			try (PreparedStatement checkUser = connection.prepareStatement("select ID from USERSTORE where USERNAME = ? limit 1;")) {
+				checkUser.setString(1, username);
+				try (ResultSet result = checkUser.executeQuery()) {
+					exists = result.next();
+				}
+			}
+			connection.commit();
+			return exists;
+		} catch (SQLException e) {
+			throw new UserStoreException(e);
+		}
+	}
+	
+	@Override public boolean verifyPassword(String username, char[] password) {
+		String passHash = null;
+		try (Connection connection = createConnection()) {
+			ensureUserTables(connection);
+			try (PreparedStatement checkUser = connection.prepareStatement("select PASSWORDHASH from USERSTORE where USERNAME = ? limit 1;")) {
+				checkUser.setString(1, username);
+				try (ResultSet result = checkUser.executeQuery()) {
+					if (result.next()) {
+						passHash = result.getString(1);
+					}
+				}
+			}
+			connection.commit();
+			
+			if (passHash == null) {
+				return false;
+			}
+			return crypto.verifyPassword(passHash, password);
+		} catch (SQLException e) {
+			throw new UserStoreException(e);
+		}
+	}
+	
+	@Override public void createUserWithTotp(String username, char[] password, String secret, long lastSuccessfulTick) {
 		try (Connection connection = createConnection()) {
 			ensureUserTables(connection);
 			try (
 				PreparedStatement createUser = connection.prepareStatement("insert into USERSTORE (USERNAME, PASSWORDHASH) values (?, ?);");
 				PreparedStatement createTotp = connection.prepareStatement("insert into TOTPSTORE (USERNAME, SECRET, LASTTICK, FAILCOUNT) values (?, ?, ?, ?);")) {
 				createUser.setString(1, username);
-				createUser.setString(2, crypto.hashPassword(password.toCharArray()));
+				createUser.setString(2, crypto.hashPassword(password));
 				createTotp.setString(1, username);
 				createTotp.setString(2, secret);
 				createTotp.setLong(3, lastSuccessfulTick);

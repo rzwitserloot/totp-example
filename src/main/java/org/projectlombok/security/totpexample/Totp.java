@@ -19,14 +19,14 @@ public final class Totp {
 	private static final TotpResult[] ACTION;
 	
 	static {
-		long[] d = new long[11];
-		TotpResult[] t = new TotpResult[11];
+		long[] d = new long[12];
+		TotpResult[] t = new TotpResult[12];
 		int o = 0;
 		for (int i = 0; i < 3; i++) {
 			d[o] = i;
 			t[o++] = TotpResult.SUCCESS;
 		}
-		for (int i = 3; i < 6; i++) {
+		for (int i = 3; i < 7; i++) {
 			d[o] = i;
 			t[o++] = TotpResult.CLOCK_MISMATCH_NEARBY;
 		}
@@ -132,7 +132,7 @@ public final class Totp {
 		if (result.result == TotpResult.SUCCESS) {
 			// TODO review all these session.getOrDefaults; I'd really just rather do a getAndItNeedsToBeThere kind of call here. It should be, but bad stuff happens if this password isn't in here.
 			String password = session.getOrDefault("password", null);
-			users.createUserWithTotp(username, password, secret, result.tick - 1);
+			users.createUserWithTotp(username, password.toCharArray(), secret, result.tick - 1);
 		}
 		return result.result;
 	}
@@ -144,11 +144,14 @@ public final class Totp {
 		return users.getTotpData(username);
 	}
 	
+	public boolean isLockedOut(TotpData data) {
+		return data.getFailureCount() >= LOCKOUT_LIMIT;
+	}
+	
 	/**
 	 * @param sessionKey A session started with {@link #startCheckTotp(String)}.
 	 */
-	public TotpResult finishCheckTotp(String sessionKey, String verificationCode) {
-		Session session = sessions.get(sessionKey);
+	public TotpResult finishCheckTotp(Session session, String verificationCode) {
 		if (session == null) throw new TotpException("Session expired / nonexistent");
 		String username = session.getOrDefault("username", null);
 		TotpData userData = users.getTotpData(username);

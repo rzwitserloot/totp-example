@@ -2,6 +2,8 @@ package org.projectlombok.security.totpexample.servlets;
 
 import java.io.IOException;
 import java.io.Writer;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -14,6 +16,7 @@ import javax.servlet.http.HttpServletResponse;
 import org.projectlombok.security.totpexample.Session;
 import org.projectlombok.security.totpexample.SessionStore;
 import org.projectlombok.security.totpexample.Totp;
+import org.projectlombok.security.totpexample.UserStore;
 
 import freemarker.template.Configuration;
 import freemarker.template.Template;
@@ -23,12 +26,14 @@ public class SetupTotpServlet extends HttpServlet {
 	// SECURITY NOTE: TODO - explain this in some more detail.
 	private static final long DEFAULT_TIME_TO_LIVE = TimeUnit.MINUTES.toMillis(30);
 	
+	private final UserStore users;
 	private final SessionStore sessions;
 	private final Template setupTotpTemplate;
 	private final Totp totp;
 	
-	public SetupTotpServlet(Configuration templates, SessionStore sessions, Totp totp) throws IOException {
+	public SetupTotpServlet(Configuration templates, UserStore users, SessionStore sessions, Totp totp) throws IOException {
 		this.setupTotpTemplate = templates.getTemplate("setupTotp.html");
+		this.users = users;
 		this.sessions = sessions;
 		this.totp = totp;
 	}
@@ -45,6 +50,11 @@ public class SetupTotpServlet extends HttpServlet {
 		
 		if (username == null || username.isEmpty()) {
 			error(request, response, "You need to pick a username.");
+			return;
+		}
+		
+		if (users.userExists(username)) {
+			error(request, response, "That username has been taken.");
 			return;
 		}
 		
@@ -86,15 +96,42 @@ public class SetupTotpServlet extends HttpServlet {
 		renderPage(response, session);
 	}
 	
+	private String calculateCode(String secret, long delta) {
+		/*
+		 * We intentionally use reflection here; showing a user the correct code is not something you ever actually need or want,
+		 * therefore this API call is intentionally not public. This demo is the only time you'd want to do that.
+		 */
+		
+		try {
+			Field keyValidationField = Totp.class.getDeclaredField("KEY_VALIDATION_WINDOW");
+			keyValidationField.setAccessible(true);
+			long keyValidation = (Long) keyValidationField.get(null);
+			long tick = System.currentTimeMillis() / keyValidation + delta;
+			Method toBytes = Totp.class.getDeclaredMethod("toBytes", String.class);
+			toBytes.setAccessible(true);
+			byte[] rawSecret = (byte[]) toBytes.invoke(null, secret);
+			Method calculateCode = Totp.class.getDeclaredMethod("calculateCode", byte[].class, long.class);
+			calculateCode.setAccessible(true);
+			return (String) calculateCode.invoke(null, rawSecret, tick);
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("This isn't possible; mismatch between TOTP implementation version and TOTP demo version");
+		}
+	}
+	
 	private void renderPage(HttpServletResponse response, Session session) throws IOException, ServletException {
 		Map<String, Object> root = new HashMap<>();
 		root.put("uri", session.getOrDefault(Totp.SESSIONKEY_URI, null));
 		root.put("key", session.getSessionKey());
-		root.put("secret", session.getOrDefault(Totp.SESSIONKEY_SECRET, null));
-		String error = session.getOrDefault("err", "");
+		String secret = session.getOrDefault(Totp.SESSIONKEY_SECRET, null);
+		root.put("secret", secret);
+		String error = session.getOrDefault("errMsg", "");
 		if (!error.isEmpty()) {
 			root.put("errMsg", error);
 		}
+		
+		root.put("correctTotpCode", calculateCode(secret, 0L));
+		root.put("threeMinutesOutCode", calculateCode(secret, 6L));
+		root.put("hourOutCode", calculateCode(secret, 120L));
 		
 		response.setContentType("text/html; charset=UTF-8");
 		try (Writer out = response.getWriter()) {

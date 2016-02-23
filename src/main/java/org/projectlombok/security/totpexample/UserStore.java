@@ -7,5 +7,7 @@ public interface UserStore {
 	TotpData getTotpData(String username);
 	void updateLastSuccessfulTickAndClearFailureCount(String username, long lastSuccessfulTick);
 	int incrementFailureCount(String username);
-	void createUserWithTotp(String username, String password, String secret, long lastSuccessfulTick);
+	void createUserWithTotp(String username, char[] password, String secret, long lastSuccessfulTick);
+	boolean userExists(String username);
+	boolean verifyPassword(String username, char[] password);
 }

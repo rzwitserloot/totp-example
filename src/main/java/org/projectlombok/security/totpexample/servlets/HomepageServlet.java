@@ -17,34 +17,32 @@ import freemarker.template.Configuration;
 import freemarker.template.Template;
 import freemarker.template.TemplateException;
 
-public class LoginServlet extends HttpServlet {
-	private final Template loginTemplate;
+public class HomepageServlet extends HttpServlet {
+	private final Template homepageTemplate;
 	private final SessionStore sessions;
 	
-	public LoginServlet(Configuration templates, SessionStore sessions) throws IOException {
-		this.loginTemplate = templates.getTemplate("login.html");
+	public HomepageServlet(Configuration templates, SessionStore sessions) throws IOException {
+		this.homepageTemplate = templates.getTemplate("homepage.html");
 		this.sessions = sessions;
 	}
 	
 	@Override protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-		String sessionKey = request.getParameter("err");
-		String errorMessage = "";
+		String sessionKey = request.getParameter("msg");
+		String userMessage = "";
 		if (sessionKey != null) {
 			try {
-				errorMessage = sessions.get(sessionKey).getOrDefault("errMsg", "");
+				userMessage = sessions.get(sessionKey).getOrDefault("msg", "");
 			} catch (SessionStoreException e) {
-				// TODO: Abstract away a log concept with the notion of 'auth' logs with a bunch of SECURITY notes about how to do that properly.
-				System.err.println(e);
-				e.printStackTrace();
+				userMessage = "";
 			}
 		}
 		Map<String, Object> root = new HashMap<>();
-		if (!errorMessage.isEmpty()) root.put("errMsg", errorMessage);
+		if (!userMessage.isEmpty()) root.put("userMsg", userMessage);
 		response.setContentType("text/html; charset=UTF-8");
 		try (Writer out = response.getWriter()) {
-			loginTemplate.process(root, out);
+			homepageTemplate.process(root, out);
 		} catch (TemplateException e) {
-			throw new ServletException("Template broken: login.html", e);
+			throw new ServletException("Template broken: homepage.html", e);
 		}
 	}
 }
