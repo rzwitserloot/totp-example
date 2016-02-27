@@ -16,6 +16,9 @@ import org.projectlombok.security.totpexample.SessionNotFoundException;
 import org.projectlombok.security.totpexample.SessionStore;
 import org.projectlombok.security.totpexample.SessionStoreException;
 
+/**
+ * This is an embedded DB engine (based on {@code h2database.com}) based implementation of the {@code SessionStore} interface.
+ */
 public class DbBasedSessionStore implements SessionStore {
 	private final Crypto crypto;
 	private final File dbDir = new File("./db");

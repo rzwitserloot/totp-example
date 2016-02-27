@@ -14,6 +14,20 @@ import org.projectlombok.security.totpexample.TotpException;
 import org.projectlombok.security.totpexample.UserStore;
 import org.projectlombok.security.totpexample.Totp.TotpResult;
 
+/**
+ * This servlet confirms that a signing up user verifies that their TOTP device is giving correct codes.
+ * 
+ * Once this confirmation is complete, a long lived session is created  to track that the device the user is accessing this page from, is now authorized as a logged in
+ * device (at least until the session expires).
+ * <p>
+ * It never renders anything; it always redirects:<ul>
+ * <li>If the TOTP verification fails and there's no hope left it goes back to {@link SignupServlet}</li>
+ * <li>If the TOTP verification fails and the user should try again, it goes back to {@link SetupTotpServlet}</li>
+ * <li>If the TOTP verification succeeds, it sets a cookie to track the login session and goes on to {@link LoggedInUsersServlet}</li>
+ * </ul>
+ * <p>
+ * <em>NB: </em>Some sites, after signing up, force the user to log in as normal. This is user hostile and does not add any meaningful security. You should not do this.
+ */
 public class ConfirmTotpSetupServlet extends HttpServlet {
 	private final UserStore users;
 	private final SessionStore sessions;
@@ -87,9 +101,9 @@ public class ConfirmTotpSetupServlet extends HttpServlet {
 	private void error(HttpServletResponse response, Session session, String message, boolean hopeless) throws IOException {
 		session.put("errMsg", message);
 		if (hopeless) {
-			response.sendRedirect("/signup?err=" + session.getSessionKey());
+			response.sendRedirect("/signup?si=" + session.getSessionKey());
 		} else {
-			response.sendRedirect("/setup-totp?err=" + session.getSessionKey());
+			response.sendRedirect("/setup-totp?si=" + session.getSessionKey());
 		}
 	}
 	

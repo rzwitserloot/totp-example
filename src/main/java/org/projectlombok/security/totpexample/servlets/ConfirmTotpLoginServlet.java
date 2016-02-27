@@ -15,6 +15,16 @@ import org.projectlombok.security.totpexample.TotpException;
 import org.projectlombok.security.totpexample.UserStore;
 import org.projectlombok.security.totpexample.Totp.TotpResult;
 
+/**
+ * This servlet confirms that a logging in user enters the right TOTP code and creates a long lived session to track that the device the user is accessing this page from, is now authorized as a logged in
+ * device (at least until the session expires).
+ * 
+ * It never renders anything; it always redirects:<ul>
+ * <li>If the TOTP verification fails and there's no hope left it goes back to {@link LoginServlet}</li>
+ * <li>If the TOTP verification fails and the user should try again, it goes back to {@link VerifyTotpServlet}</li>
+ * <li>If the TOTP verification succeeds, it sets a cookie to track the login session and goes on to {@link LoggedInUsersServlet}</li>
+ * </ul>
+ */
 public class ConfirmTotpLoginServlet extends HttpServlet {
 	private final UserStore users;
 	private final SessionStore sessions;
@@ -88,9 +98,9 @@ public class ConfirmTotpLoginServlet extends HttpServlet {
 	private void error(HttpServletResponse response, Session session, String message, boolean hopeless) throws IOException {
 		session.put("errMsg", message);
 		if (hopeless) {
-			response.sendRedirect("/login?err=" + session.getSessionKey());
+			response.sendRedirect("/login?si=" + session.getSessionKey());
 		} else {
-			response.sendRedirect("/verify-totp?err=" + session.getSessionKey());
+			response.sendRedirect("/verify-totp?si=" + session.getSessionKey());
 		}
 	}
 	
@@ -103,7 +113,7 @@ public class ConfirmTotpLoginServlet extends HttpServlet {
 		String sessionCookie = users.createNewLongLivedSession(username);
 		Cookie c = new Cookie("s", sessionCookie);
 		c.setPath("/");
-		// c.setSecure(true);  TODO SECURITY
+		// c.setSecure(true);  // TODO security. What happens if we set this without HTTPS?
 		response.addCookie(c);
 	}
 }

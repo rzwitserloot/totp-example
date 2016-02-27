@@ -11,6 +11,10 @@ import java.util.Arrays;
  * designed by Niels Provos and David Mazières, using the
  * String format and the Base64 encoding
  * of the reference implementation on OpenBSD
+ * 
+ * Used in this demo application to store password hashes in the database.
+ * 
+ * SECURITY NOTE: If you are not using BCrypt, SCrypt, PBKDF2, or Argon2, you should fix that immediately; your passwords are stored securely!
  */
 public final class BCrypt {
 	private static final byte[] ENCODING_TABLE;
@@ -42,12 +46,9 @@ public final class BCrypt {
 	 * Creates a 60 character Bcrypt String, including version, cost factor,
 	 * salt and hash, separated by '$'
 	 *
-	 * @param cost
-	 *            the cost factor, treated as an exponent of 2
-	 * @param salt
-	 *            a 16 byte salt
-	 * @param password
-	 *            the password
+	 * @param cost the cost factor, treated as an exponent of 2
+	 * @param salt a 16 byte salt
+	 * @param password the password
 	 * @return a 60 character Bcrypt String
 	 */
 	private static String createBcryptString(byte[] password, byte[] salt, int cost) {
@@ -70,12 +71,9 @@ public final class BCrypt {
 	 * Creates a 60 character Bcrypt String, including version, cost factor,
 	 * salt and hash, separated by '$'
 	 *
-	 * @param cost
-	 *            the cost factor, treated as an exponent of 2
-	 * @param salt
-	 *            a 16 byte salt
-	 * @param password
-	 *            the password
+	 * @param cost the cost factor, treated as an exponent of 2
+	 * @param salt a 16 byte salt
+	 * @param password the password
 	 * @return a 60 character Bcrypt String
 	 */
 	public static String generate(char[] password, byte[] salt, int cost) {
@@ -120,13 +118,10 @@ public final class BCrypt {
 	/**
 	 * Checks if a password corresponds to a 60 character Bcrypt String
 	 *
-	 * @param bcryptString
-	 *            a 60 character Bcrypt String, including version, cost factor,
+	 * @param bcryptString a 60 character Bcrypt String, including version, cost factor,
 	 *            salt and hash, separated by '$'
-	 * @param password
-	 *            the password as an array of chars
-	 * @return true if the password corresponds to the Bcrypt String, otherwise
-	 *         false
+	 * @param password the password as an array of chars
+	 * @return true if the password corresponds to the Bcrypt String, otherwise false
 	 */
 	public static boolean checkPassword(String bcryptString, char[] password) {
 		// validate bcryptString:

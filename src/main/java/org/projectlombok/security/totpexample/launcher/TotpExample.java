@@ -15,6 +15,7 @@ import org.projectlombok.security.totpexample.servlets.ConfirmTotpSetupServlet;
 import org.projectlombok.security.totpexample.servlets.HomepageServlet;
 import org.projectlombok.security.totpexample.servlets.LoggedInUsersServlet;
 import org.projectlombok.security.totpexample.servlets.LoginServlet;
+import org.projectlombok.security.totpexample.servlets.LogoutServlet;
 import org.projectlombok.security.totpexample.servlets.QrServlet;
 import org.projectlombok.security.totpexample.servlets.SetupTotpServlet;
 import org.projectlombok.security.totpexample.servlets.SignupServlet;
@@ -28,12 +29,21 @@ import freemarker.template.TemplateExceptionHandler;
  * pre-configured to port 8837 and with our servlets.
  * 
  * This file should not be in your project.
- * 
+ * <p>
  * The servlets that this application serves up are:
  * 
- * /signup         SignupServlet
- * /login          LoginServlet
- * .... TODO
+ * /                   HomepageServlet         Home page of users that aren't logged in.</li>
+ * 
+ * /signup             SignupServlet           Begins the signup process
+ * /setup-totp         SetupTotpServlet        Shows the TOTP setup QR code and instructions to complete the signup process.
+ * /confirm-totp-setup ConfirmTotpSetupServlet Completes the signup process and redirects to /main
+ * 
+ * /login              LoginServlet            Begins the login process
+ * /verify-totp        VerifyTotpServlet       Asks the user to verify their login by entering the TOTP code shown on their device.
+ * /confirm-totp-login ConfirmTotpLoginServlet Completes the login process and redirects to /main
+ * 
+ * /main               LoggedInUsersServlet    Home page of users that are logged in.
+ * /logout             LogoutServlet           Logs a user out then redirects to /
  * 
  * Check those source files, in that order, to learn about how to implement TOTP in your own project.
  */
@@ -50,7 +60,8 @@ public class TotpExample {
 		Totp totp = new Totp(users, sessions, crypto);
 		
 		context.addServlet(new ServletHolder(new HomepageServlet(templates, sessions)), "/");
-		context.addServlet(new ServletHolder(new LoggedInUsersServlet(templates, users)), "/main");
+		context.addServlet(new ServletHolder(new LogoutServlet(users, sessions)), "/logout");
+		context.addServlet(new ServletHolder(new LoggedInUsersServlet(templates, users, sessions)), "/main");
 		
 		context.addServlet(new ServletHolder(new SignupServlet(templates, sessions)), "/signup");
 		context.addServlet(new ServletHolder(new SetupTotpServlet(templates, users, sessions, totp)), "/setup-totp");
@@ -68,19 +79,23 @@ public class TotpExample {
 	}
 	
 	private static SessionStore createSessionStore(Crypto crypto) {
+		// This is a demo implementation of a session store, built around an embedded DB engine that works with local files.
 		return new DbBasedSessionStore(crypto);
 	}
 	
 	private static UserStore createUserStore(Crypto crypto) {
+		// This is a demo implementation of a session store, built around an embedded DB engine that works with local files.
 		return new DbBasedUserStore(crypto);
 	}
 	
 	private static Configuration createTemplateConfiguration() {
+		// The templates rendered by this demo application are based on Apache Freemarker.
+		
 		Configuration cfg = new Configuration(Configuration.VERSION_2_3_23);
 		cfg.setClassLoaderForTemplateLoading(TotpExample.class.getClassLoader(), TemplatesHome.class.getPackage().getName().replace(".", "/"));
 		cfg.setDefaultEncoding("UTF-8");
 		
-		// SECURITY NOTE: You should use the TemplateExceptionHandler.RETHROW_HANDLER in production.
+		// SECURITY NOTE: You should use the TemplateExceptionHandler.RETHROW_HANDLER in production!
 		cfg.setTemplateExceptionHandler(TemplateExceptionHandler.HTML_DEBUG_HANDLER);
 		return cfg;
 	}

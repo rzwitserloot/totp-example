@@ -16,6 +16,9 @@ import org.projectlombok.security.totpexample.UserStore;
 import org.projectlombok.security.totpexample.UserStoreException;
 import org.projectlombok.security.totpexample.Totp.TotpData;
 
+/**
+ * This is an embedded DB engine (based on {@code h2database.com}) based implementation of the {@code UserStore} interface.
+ */
 public class DbBasedUserStore implements UserStore {
 	private static final long DEFAULT_USERSESSION_EXPIRY = TimeUnit.DAYS.toMillis(5);
 	private final Crypto crypto;
@@ -40,7 +43,11 @@ public class DbBasedUserStore implements UserStore {
 			available = tables.next();
 		}
 		
-		if (!available) {
+		if (available) {
+			try (Statement s = connection.createStatement()) {
+				s.execute("delete from USERSESSIONSTORE where EXPIRES < now();");
+			}
+		} else {
 			try (Statement s = connection.createStatement()) {
 				// USERSTORE+TOTPSTORE could of course be a single table (integrate columns 'LASTTICK', 'FAILCOUNT', and 'SECRET' from TOTPSTORE into USERSTORE).
 				// Here we use 2 tables, to show how to update an existing installation without modifying a table. This setup is also nice if you
@@ -241,6 +248,34 @@ public class DbBasedUserStore implements UserStore {
 				addSessionKey.executeUpdate();
 				connection.commit();
 				return sessionKey;
+			}
+		} catch (SQLException e) {
+			throw new UserStoreException(e);
+		}
+	}
+	
+	@Override public void destroyLongLivedSession(String sessionId) {
+		try (Connection connection = createConnection()) {
+			ensureUserTables(connection);
+			try (
+				PreparedStatement findUserId = connection.prepareStatement("select USERID from USERSESSIONSTORE where SESSIONKEY = ? limit 1;");
+				PreparedStatement deleteSessions = connection.prepareStatement("delete from USERSESSIONSTORE where USERID = ?;")) {
+				
+				findUserId.setString(1, sessionId);
+				Integer userId = null;
+				try (ResultSet results = findUserId.executeQuery()) {
+					if (results.next()) {
+						userId = results.getInt(1);
+					}
+				}
+				
+				if (userId == null) {
+					connection.commit();
+					return;
+				}
+				deleteSessions.setInt(1, userId);
+				deleteSessions.executeUpdate();
+				connection.commit();
 			}
 		} catch (SQLException e) {
 			throw new UserStoreException(e);

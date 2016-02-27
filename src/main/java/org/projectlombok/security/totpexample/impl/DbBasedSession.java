@@ -6,9 +6,12 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 
 import org.projectlombok.security.totpexample.Session;
-import org.projectlombok.security.totpexample.SessionExpiredException;
+import org.projectlombok.security.totpexample.SessionNotFoundException;
 import org.projectlombok.security.totpexample.SessionStoreException;
 
+/**
+ * This is an embedded DB engine (based on {@code h2database.com}) based implementation of the {@code Session} interface.
+ */
 class DbBasedSession implements Session {
 	private final DbBasedSessionStore store;
 	private final int sessionId;
@@ -49,7 +52,7 @@ class DbBasedSession implements Session {
 		try (PreparedStatement s = connection.prepareStatement("select ID from SESSIONSTORE where id = ? and EXPIRES >= now();")) {
 			s.setInt(1, sessionId);
 			try (ResultSet result = s.executeQuery()) {
-				if (!result.next()) throw new SessionExpiredException(sessionKey);
+				if (!result.next()) throw new SessionNotFoundException(sessionKey);
 			}
 		} catch (SQLException e) {
 			throw new SessionStoreException(e);

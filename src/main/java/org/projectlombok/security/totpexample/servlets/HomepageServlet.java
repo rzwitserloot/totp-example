@@ -17,6 +17,9 @@ import freemarker.template.Configuration;
 import freemarker.template.Template;
 import freemarker.template.TemplateException;
 
+/**
+ * This servlet serves up a homepage for users that aren't logged in.
+ */
 public class HomepageServlet extends HttpServlet {
 	private final Template homepageTemplate;
 	private final SessionStore sessions;
@@ -27,7 +30,7 @@ public class HomepageServlet extends HttpServlet {
 	}
 	
 	@Override protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-		String sessionKey = request.getParameter("msg");
+		String sessionKey = request.getParameter("si");
 		String userMessage = "";
 		if (sessionKey != null) {
 			try {

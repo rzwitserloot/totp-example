@@ -5,11 +5,16 @@ import java.net.URLEncoder;
 import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.NoSuchAlgorithmException;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.concurrent.TimeUnit;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
+/**
+ * This class represents TOTP, the protocol, providing API for all TOTP related actions, including setting up, verifying, and unlocking.
+ */
 public final class Totp {
 	public static final String SESSIONKEY_USERNAME = "totpUsername";
 	public static final String SESSIONKEY_URI = "totpUri";
@@ -170,6 +175,26 @@ public final class Totp {
 		return result.result;
 	}
 	
+	/**
+	 * This call requires at least 3 consecutive codes ({@code verificationCodes.size()} must be 3 or more).
+	 * 
+	 * This call will try TOTP verification even if this user has reached the lockout limit, and the lockout limit is not incremented with this call.
+	 */
+	public TotpResult finishCheckTotpForCancellingLockout(Session session, Collection<String> verificationCodes) {
+		if (verificationCodes.size() < 3) throw new IllegalArgumentException("At least 3 codes required. 3 to 4 are suggested.");
+		if (session == null) throw new TotpException("Session expired / nonexistent");
+		
+		String username = session.getOrDefault("username", null);
+		TotpData userData = users.getTotpData(username);
+		CodeVerification result = verifyCodes(userData.getSecret(), verificationCodes, userData.getLastSuccessfulTick());
+		if (result.result == TotpResult.SUCCESS) {
+			users.updateLastSuccessfulTickAndClearFailureCount(username, result.tick);
+			return result.result;
+		}
+		
+		return result.result;
+	}
+	
 	private static String toUri(String username, String application, String secret) {
 		String app = urlSafe(application);
 		String user = urlSafe(username);
@@ -198,6 +223,47 @@ public final class Totp {
 		}
 		
 		return new CodeVerification(TotpResult.CODE_VERIFICATION_FAILURE, 0L);
+	}
+	
+	private CodeVerification verifyCodes(String secret, Collection<String> verificationCodes, long lastSuccessfulTick) {
+		byte[] secretBytes = toBytes(secret);
+		long tick = System.currentTimeMillis() / KEY_VALIDATION_WINDOW;
+		
+		Iterator<String> it = verificationCodes.iterator();
+		String firstCode = it.next();
+		for (int i = 0; i < DELTAS.length; i++) {
+			long d = DELTAS[i];
+			
+			long t = tick + d;
+			if (calculateCode(secretBytes, t).equals(firstCode)) {
+				if (t <= lastSuccessfulTick) return new CodeVerification(TotpResult.CODE_ALREADY_USED, t);
+				if (verifyFollowupCodes(secretBytes, t + 1, it)) {
+					return new CodeVerification(ACTION[i], t);
+				}
+			}
+			
+			if (d != 0) {
+				t = tick - d;
+				if (calculateCode(secretBytes, t).equals(firstCode)) {
+					if (t <= lastSuccessfulTick) return new CodeVerification(TotpResult.CODE_ALREADY_USED, t);
+					if (verifyFollowupCodes(secretBytes, t + 1, it)) {
+						return new CodeVerification(ACTION[i], t);
+					}
+				}
+			}
+		}
+		
+		return new CodeVerification(TotpResult.CODE_VERIFICATION_FAILURE, 0L);
+	}
+	
+	private boolean verifyFollowupCodes(byte[] secretBytes, long startTick, Iterator<String> input) {
+		while (input.hasNext()) {
+			if (!calculateCode(secretBytes, startTick++).equals(input.next())) {
+				return false;
+			}
+		}
+		
+		return true;
 	}
 	
 	private static String urlSafe(String value) {
