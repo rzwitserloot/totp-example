@@ -60,7 +60,7 @@ public class LoggedInUsersServlet extends HttpServlet {
 		}
 	}
 	
-	private void sendToLogin(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+	private void sendToLogin(HttpServletRequest request, HttpServletResponse response) throws IOException {
 		Session errorSession = sessions.create(DEFAULT_TIME_TO_LIVE);
 		errorSession.put("errMsg", "Please log in first.");
 		response.sendRedirect("/login?si=" + errorSession.getSessionKey());

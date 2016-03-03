@@ -133,7 +133,7 @@ public class VerifyTotpServlet extends HttpServlet {
 		}
 	}
 	
-	private void error(HttpServletRequest request, HttpServletResponse response, String message) throws ServletException, IOException {
+	private void error(HttpServletRequest request, HttpServletResponse response, String message) throws IOException {
 		Session session = sessions.create(DEFAULT_TIME_TO_LIVE);
 		session.put("errMsg", message);
 		response.sendRedirect("/login?si=" + session.getSessionKey());

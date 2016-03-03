@@ -21,7 +21,7 @@ public class LogoutServlet extends HttpServlet {
 	private final UserStore users;
 	private final SessionStore sessions;
 	
-	public LogoutServlet(UserStore users, SessionStore sessions) throws IOException {
+	public LogoutServlet(UserStore users, SessionStore sessions) {
 		this.users = users;
 		this.sessions = sessions;
 	}

@@ -30,7 +30,7 @@ public class ConfirmTotpLoginServlet extends HttpServlet {
 	private final SessionStore sessions;
 	private final Totp totp;
 	
-	public ConfirmTotpLoginServlet(UserStore users, SessionStore sessions, Totp totp) throws IOException {
+	public ConfirmTotpLoginServlet(UserStore users, SessionStore sessions, Totp totp) {
 		this.users = users;
 		this.sessions = sessions;
 		this.totp = totp;
@@ -104,7 +104,7 @@ public class ConfirmTotpLoginServlet extends HttpServlet {
 		}
 	}
 	
-	private void finishLogin(HttpServletResponse response, String username) throws ServletException, IOException {
+	private void finishLogin(HttpServletResponse response, String username) throws IOException {
 		addSessionCookie(response, users, username);
 		response.sendRedirect("/main");
 	}
