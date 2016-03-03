@@ -12,6 +12,7 @@ import org.projectlombok.security.totpexample.impl.DbBasedSessionStore;
 import org.projectlombok.security.totpexample.impl.DbBasedUserStore;
 import org.projectlombok.security.totpexample.servlets.ConfirmTotpLoginServlet;
 import org.projectlombok.security.totpexample.servlets.ConfirmTotpSetupServlet;
+import org.projectlombok.security.totpexample.servlets.CssServlet;
 import org.projectlombok.security.totpexample.servlets.HomepageServlet;
 import org.projectlombok.security.totpexample.servlets.LoggedInUsersServlet;
 import org.projectlombok.security.totpexample.servlets.LoginServlet;
@@ -72,6 +73,7 @@ public class TotpExample {
 		context.addServlet(new ServletHolder(new ConfirmTotpLoginServlet(users, sessions, totp)), "/confirm-totp-login");
 		
 		context.addServlet(new ServletHolder(new QrServlet(sessions)), "/qrcode");
+		context.addServlet(new ServletHolder(new CssServlet(templates)), "/css");
 		server.setHandler(context);
 		
 		server.start();
