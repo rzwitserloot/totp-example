@@ -2,21 +2,24 @@
 <html>
 	<head>
 		<title>Login to the TOTP example!</title>
+		<link href='https://fonts.googleapis.com/css?family=Roboto:400,500,700,700italic,500italic,400italic' rel='stylesheet' type='text/css'>
 		<link rel="stylesheet" type="text/css" href="/css">
 	</head>
 	<body>
-		<#if errMsg??>
-			<div class="errorBox">
-				${errMsg?html}
-			</div>
-		</#if>
-		<a href="/signup">Sign up for an account</a>
-		<p>
-		Or log in using an existing account
-		<form action="/verify-totp" method="POST">
-			<input name="username" placeholder="username" /><br />
-			<input name="password" placeholder="password" type="password" /><br />
-			<input type="submit" value="Next" />
-		</form>
+		<div class="wrapper">
+			<#if errMsg??>
+				<div class="errorBox">
+					${errMsg?html}
+				</div>
+			</#if>
+			<a href="/signup">Sign up for an account</a>
+			<p>
+			Or log in using an existing account
+			<form action="/verify-totp" method="POST">
+				<input name="username" placeholder="username" /><br />
+				<input name="password" placeholder="password" type="password" /><br />
+				<input type="submit" value="Next" />
+			</form>
+		</div>
 	</body>
 </html>

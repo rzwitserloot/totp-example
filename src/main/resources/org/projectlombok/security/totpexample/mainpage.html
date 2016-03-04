@@ -2,13 +2,16 @@
 <html>
 	<head>
 		<title>The TOTP example logged in page</title>
+		<link href='https://fonts.googleapis.com/css?family=Roboto:400,500,700,700italic,500italic,400italic' rel='stylesheet' type='text/css'>
 		<link rel="stylesheet" type="text/css" href="/css">
 	</head>
 	<body>
-		<h1>Hello, ${username?html}</h1>
-		
-		You are successfully logged in.
-		<p>
-		<a href="/logout">log out</a>.
+		<div class="wrapper">
+			<h1>Hello, ${username?html}</h1>
+			<p class="message">
+			You are successfully logged in.
+			</p>
+			<a href="/logout">log out</a>.
+		</div>
 	</body>
 </html>

@@ -2,32 +2,35 @@
 <html>
 	<head>
 		<title>Setup TOTP</title>
+		<link href='https://fonts.googleapis.com/css?family=Roboto:400,500,700,700italic,500italic,400italic' rel='stylesheet' type='text/css'>
 		<link rel="stylesheet" type="text/css" href="/css">
 	</head>
 	<body>
-		<#if errMsg??>
-			<div class="errorBox">
-				${errMsg?html}
+		<div class="wrapper">
+			<#if errMsg??>
+				<div class="errorBox">
+					${errMsg?html}
+				</div>
+			</#if>
+			<p>
+			<img src="/qrcode?key=${key}" style="width:200px;height:200px;">
+			<p>
+			Enter the code displayed on your device to confirm the setup.
+			<p>
+			<form class="midPageForm" action="/confirm-totp-setup" method="POST">
+				<input name="code" placeholder="code" /><br />
+				<input type="hidden" name="key" value="${key}">
+				<input type="submit" value="Confirm" />
+			</form>
+			<div class="demoNote">
+				You should obviously never give this in a real TOTP application, but as a demo, here are some TOTP codes that your phone would be telling you if you scanned the QR code: <br />
+				Correct code: <span> ${correctTotpCode}</span><br />
+				If your phone is three minutes ahead: ${threeMinutesOutCode}<br />
+				If your phone has the wrong Daylight Savings Time setting: ${hourOutCode}<br />
+				<br />
+				Give these a try to see what the demo app does. Also, of course, try a random code as well,
+				such as 000042. We determined that one by random dice roll, we swear.
 			</div>
-		</#if>
-		<p>
-		<img src="/qrcode?key=${key}" style="width:200px;height:200px;">
-		<p>
-		Enter the code displayed on your device to confirm the setup.
-		<p>
-		<form action="/confirm-totp-setup" method="POST">
-			<input name="code" placeholder="code" /><br />
-			<input type="hidden" name="key" value="${key}">
-			<input type="submit" value="Confirm" />
-		</form>
-		<div class="demoNote">
-			You should obviously never give this in a real TOTP application, but as a demo, here are some TOTP codes that your phone would be telling you if you scanned the QR code: <br />
-			Correct code: ${correctTotpCode}<br />
-			If your phone is three minutes ahead: ${threeMinutesOutCode}<br />
-			If your phone has the wrong Daylight Savings Time setting: ${hourOutCode}<br />
-			<br />
-			Give these a try to see what the demo app does. Also, of course, try a random code as well,
-			such as 000042. We determined that one by random dice roll, we swear.
 		</div>
 	</body>
 </html>
