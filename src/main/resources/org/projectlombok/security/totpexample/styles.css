@@ -49,32 +49,44 @@ table {
 
 /* end style reset */
 
+@font-face {
+	font-family: 'Roboto';
+	font-weight: 400;
+	src: url('/fonts/Roboto-Regular.ttf');
+}
+
+@font-face {
+	font-family: 'Roboto';
+	font-weight: 500;
+	src: url('/fonts/Roboto-Medium.ttf');
+}
+
 body {
-  font-family: 'Roboto', sans-serif;
-  font-weight: 400;
-  background-color: #f2f2f2;
+	font-family: 'Roboto', sans-serif;
+	font-weight: 400;
+	background-color: #f2f2f2;
 }
 
 .wrapper {
-  max-width: 500px;
-  margin: 20px auto;
-  font-size: 1em;
-  line-height: 1.5em;
+	max-width: 500px;
+	margin: 20px auto;
+	font-size: 1em;
+	line-height: 1.5em;
 	min-height: 500px;
-  background-color: #fff;
-  padding: 40px 20px;
-  border-radius: 5px;
+	background-color: #fff;
+	padding: 40px 20px;
+	border-radius: 5px;
 }
 
 a, a:visited {
-  color: #0D76BD;
+	color: #0D76BD;
 }
 a:hover {
-  color: #0B65A1;
+	color: #0B65A1;
 }
 
 p {
-  margin-bottom: 20px;
+	margin-bottom: 20px;
 }
 
 h1 {
@@ -84,9 +96,9 @@ h1 {
 }
 
 form {
-  border-top: 1px solid #ccc;
-  padding-top: 30px;
-  margin-top: 30px;
+	border-top: 1px solid #ccc;
+	padding-top: 30px;
+	margin-top: 30px;
 }
 
 .demoNote span{
@@ -97,8 +109,8 @@ form {
 
 .midPageForm {
 	border-bottom: 1px solid #ccc;
-  padding-bottom: 30px;
-  margin-bottom: 30px;
+	padding-bottom: 30px;
+	margin-bottom: 30px;
 }
 
 .errorBox {
@@ -118,29 +130,29 @@ form {
 }
 
 input:not([type=submit]) {
-  margin: 5px 0;
-  padding: 10px 10px;
-  width: 300px;
-  font-size: 1em;
-  border-radius: 2px;
-  border: 1px solid #ccc;
+	margin: 5px 0;
+	padding: 10px 10px;
+	width: 300px;
+	font-size: 1em;
+	border-radius: 2px;
+	border: 1px solid #ccc;
 }
 
 input:not([type=submit]):focus {
-  background-color: #C6E6FB;
+	background-color: #C6E6FB;
 }
 
 input[type=submit] {
-  margin-top: 20px;
-  padding: 10px 20px;
-  background-color: #0D76BD;
-  border: none;
-  color: #fff;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 1em;
+	margin-top: 20px;
+	padding: 10px 20px;
+	background-color: #0D76BD;
+	border: none;
+	color: #fff;
+	border-radius: 5px;
+	cursor: pointer;
+	font-size: 1em;
 }
 
 input[type=submit]:hover {
-  background-color: #0B65A1;
+	background-color: #0B65A1;
 }

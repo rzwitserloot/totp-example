@@ -5,14 +5,13 @@ import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.projectlombok.security.totpexample.Crypto;
 import org.projectlombok.security.totpexample.SessionStore;
-import org.projectlombok.security.totpexample.TemplatesHome;
+import org.projectlombok.security.totpexample.ResourcesHome;
 import org.projectlombok.security.totpexample.Totp;
 import org.projectlombok.security.totpexample.UserStore;
 import org.projectlombok.security.totpexample.impl.DbBasedSessionStore;
 import org.projectlombok.security.totpexample.impl.DbBasedUserStore;
 import org.projectlombok.security.totpexample.servlets.ConfirmTotpLoginServlet;
 import org.projectlombok.security.totpexample.servlets.ConfirmTotpSetupServlet;
-import org.projectlombok.security.totpexample.servlets.CssServlet;
 import org.projectlombok.security.totpexample.servlets.HomepageServlet;
 import org.projectlombok.security.totpexample.servlets.LoggedInUsersServlet;
 import org.projectlombok.security.totpexample.servlets.LoginServlet;
@@ -20,6 +19,7 @@ import org.projectlombok.security.totpexample.servlets.LogoutServlet;
 import org.projectlombok.security.totpexample.servlets.QrServlet;
 import org.projectlombok.security.totpexample.servlets.SetupTotpServlet;
 import org.projectlombok.security.totpexample.servlets.SignupServlet;
+import org.projectlombok.security.totpexample.servlets.StaticFilesServlet;
 import org.projectlombok.security.totpexample.servlets.VerifyTotpServlet;
 
 import freemarker.template.Configuration;
@@ -60,7 +60,7 @@ public class TotpExample {
 		UserStore users = createUserStore(crypto);
 		Totp totp = new Totp(users, sessions, crypto);
 		
-		context.addServlet(new ServletHolder(new HomepageServlet(templates, sessions)), "/");
+		context.addServlet(new ServletHolder(new HomepageServlet(templates, sessions)), "");
 		context.addServlet(new ServletHolder(new LogoutServlet(users, sessions)), "/logout");
 		context.addServlet(new ServletHolder(new LoggedInUsersServlet(templates, users, sessions)), "/main");
 		
@@ -73,7 +73,9 @@ public class TotpExample {
 		context.addServlet(new ServletHolder(new ConfirmTotpLoginServlet(users, sessions, totp)), "/confirm-totp-login");
 		
 		context.addServlet(new ServletHolder(new QrServlet(sessions)), "/qrcode");
-		context.addServlet(new ServletHolder(new CssServlet(templates)), "/css");
+		
+		context.addServlet(new ServletHolder(new StaticFilesServlet()), "/");
+		
 		server.setHandler(context);
 		
 		server.start();
@@ -94,7 +96,7 @@ public class TotpExample {
 		// The templates rendered by this demo application are based on Apache Freemarker.
 		
 		Configuration cfg = new Configuration(Configuration.VERSION_2_3_23);
-		cfg.setClassLoaderForTemplateLoading(TotpExample.class.getClassLoader(), TemplatesHome.class.getPackage().getName().replace(".", "/"));
+		cfg.setClassLoaderForTemplateLoading(TotpExample.class.getClassLoader(), ResourcesHome.class.getPackage().getName().replace(".", "/"));
 		cfg.setDefaultEncoding("UTF-8");
 		
 		// SECURITY NOTE: You should use the TemplateExceptionHandler.RETHROW_HANDLER in production!
