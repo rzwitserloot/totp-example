@@ -20,6 +20,7 @@ import org.projectlombok.security.totpexample.servlets.QrServlet;
 import org.projectlombok.security.totpexample.servlets.SetupTotpServlet;
 import org.projectlombok.security.totpexample.servlets.SignupServlet;
 import org.projectlombok.security.totpexample.servlets.StaticFilesServlet;
+import org.projectlombok.security.totpexample.servlets.TroubleshootTotpServlet;
 import org.projectlombok.security.totpexample.servlets.VerifyTotpServlet;
 
 import freemarker.template.Configuration;
@@ -41,10 +42,13 @@ import freemarker.template.TemplateExceptionHandler;
  * 
  * /login              LoginServlet            Begins the login process
  * /verify-totp        VerifyTotpServlet       Asks the user to verify their login by entering the TOTP code shown on their device.
+ * /troubleshoot-totp  TroubleshootTotpServlet Asks the user to verify their login even after entering a wrong TOTP code by asking for 3 consecutive codes.
  * /confirm-totp-login ConfirmTotpLoginServlet Completes the login process and redirects to /main
  * 
  * /main               LoggedInUsersServlet    Home page of users that are logged in.
  * /logout             LogoutServlet           Logs a user out then redirects to /
+ * 
+ * (the rest)          StaticFilesServlet      Serves up static resources; the CSS and the font files. You don't need to look at this, your web application already has facilities to serve static resources.
  * 
  * Check those source files, in that order, to learn about how to implement TOTP in your own project.
  */
@@ -60,7 +64,7 @@ public class TotpExample {
 		UserStore users = createUserStore(crypto);
 		Totp totp = new Totp(users, sessions, crypto);
 		
-		context.addServlet(new ServletHolder(new HomepageServlet(templates, sessions)), "");
+		context.addServlet(new ServletHolder(new HomepageServlet(templates, sessions)), ""); // The empty string is jetty code for '/'.
 		context.addServlet(new ServletHolder(new LogoutServlet(users, sessions)), "/logout");
 		context.addServlet(new ServletHolder(new LoggedInUsersServlet(templates, users, sessions)), "/main");
 		
@@ -70,11 +74,12 @@ public class TotpExample {
 		
 		context.addServlet(new ServletHolder(new LoginServlet(templates, sessions)), "/login");
 		context.addServlet(new ServletHolder(new VerifyTotpServlet(templates, users, sessions, totp)), "/verify-totp");
+		context.addServlet(new ServletHolder(new TroubleshootTotpServlet(templates, sessions, totp)), "/troubleshoot-totp");
 		context.addServlet(new ServletHolder(new ConfirmTotpLoginServlet(users, sessions, totp)), "/confirm-totp-login");
 		
 		context.addServlet(new ServletHolder(new QrServlet(sessions)), "/qrcode");
 		
-		context.addServlet(new ServletHolder(new StaticFilesServlet()), "/");
+		context.addServlet(new ServletHolder(new StaticFilesServlet()), "/"); // '/' is jetty code for 'everything else'.
 		
 		server.setHandler(context);
 		

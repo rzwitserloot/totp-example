@@ -59,6 +59,11 @@ public class VerifyTotpServlet extends HttpServlet {
 		}
 		
 		TotpData totpData = totp.startCheckTotp(username);
+		if (totpData.isLockedOut()) {
+			response.sendRedirect("/troubleshoot-totp?si=" + session.getSessionKey());
+			return;
+		}
+		
 		renderPage(response, session, totpData);
 	}
 	
@@ -112,6 +117,11 @@ public class VerifyTotpServlet extends HttpServlet {
 		Session session = sessions.create(LOGIN_TIME_TO_LIVE);
 		session.put("username", username);
 		
+		if (totpData.isLockedOut()) {
+			response.sendRedirect("/troubleshoot-totp?si=" + session.getSessionKey());
+			return;
+		}
+		
 		renderPage(response, session, totpData);
 	}
 	
@@ -123,8 +133,7 @@ public class VerifyTotpServlet extends HttpServlet {
 			root.put("errMsg", error);
 		}
 		
-		root.put("lockedOut", totp.isLockedOut(totpData));
-		
+		root.put("correctTotpCode", SetupTotpServlet.calculateCode(totpData.getSecret(), 0L));
 		response.setContentType("text/html; charset=UTF-8");
 		try (Writer out = response.getWriter()) {
 			verifyTotpTemplate.process(root, out);

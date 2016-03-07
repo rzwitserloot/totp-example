@@ -6,6 +6,7 @@ import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.NoSuchAlgorithmException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.concurrent.TimeUnit;
 
@@ -20,56 +21,31 @@ public final class Totp {
 	public static final String SESSIONKEY_URI = "totpUri";
 	public static final String SESSIONKEY_SECRET = "totpSecret";
 	private static final long KEY_VALIDATION_WINDOW = TimeUnit.SECONDS.toMillis(30);
-	private static final long[] DELTAS;
-	private static final TotpResult[] ACTION;
+	private static final int ALLOWED_CLOCKSKEW = 3;
 	
-	static {
-		long[] d = new long[12];
-		TotpResult[] t = new TotpResult[12];
-		int o = 0;
-		for (int i = 0; i < 3; i++) {
-			d[o] = i;
-			t[o++] = TotpResult.SUCCESS;
-		}
-		for (int i = 3; i < 7; i++) {
-			d[o] = i;
-			t[o++] = TotpResult.CLOCK_MISMATCH_NEARBY;
-		}
-		for (int i = 118; i < 123; i++) {
-			d[o] = i;
-			t[o++] = TotpResult.CLOCK_MISMATCH_DST;
-		}
-		DELTAS = d;
-		ACTION = t;
-	}
+	// When doing a check where stopping a code guesser isn't relevant, let's scan every possible code up to 25 hours away from now,
+	// this should cover every timezone mismatch and a considerable amount of misconfigured clocks.
+	private static final int ALLOWED_CLOCKSKEW_LAX = (int) TimeUnit.HOURS.toSeconds(25) * 2;
 	
 	private static final String BASE32CHARS = "abcdefghijklmnopqrstuvwxyz234567";
 	private static final long SETUP_PROCEDURE_TTL = TimeUnit.HOURS.toMillis(1);
-	private static final int LOCKOUT_LIMIT = 5;
 	
-	private final UserStore users;
-	private final SessionStore sessions;
-	private final Crypto crypto;
-	
-	public Totp(UserStore users, SessionStore sessions, Crypto crypto) {
-		this.users = users;
-		this.sessions = sessions;
-		this.crypto = crypto;
-	}
-	
+	/**
+	 * Represents a user's relevant TOTP data; this is stored persistently somewhere.
+	 */
 	public static final class TotpData {
 		private final String secret;
-		private final int failureCount;
+		private final boolean lockedOut;
 		private final long lastSuccessfulTick;
 		
-		public TotpData(String secret, int failureCount, long lastSuccessfulTick) {
+		public TotpData(String secret, boolean lockedOut, long lastSuccessfulTick) {
 			this.secret = secret;
-			this.failureCount = failureCount;
+			this.lockedOut = lockedOut;
 			this.lastSuccessfulTick = lastSuccessfulTick;
 		}
 		
-		public int getFailureCount() {
-			return failureCount;
+		public boolean isLockedOut() {
+			return lockedOut;
 		}
 		
 		public String getSecret() {
@@ -81,38 +57,109 @@ public final class Totp {
 		}
 	}
 	
-	private final class CodeVerification {
-		TotpResult result;
-		long tick;
-		
-		CodeVerification(TotpResult result, long tick) {
-			this.result = result;
-			this.tick = tick;
-		}
-	}
-	
 	public enum TotpResult {
 		SUCCESS,
 		ALREADY_LOCKED_OUT,
 		NOW_LOCKED_OUT,
-		CLOCK_MISMATCH_NEARBY,
-		CLOCK_MISMATCH_DST,
+		CLOCK_MISMATCH,
 		CODE_VERIFICATION_FAILURE,
 		CODE_ALREADY_USED,
-		SESSION_EXPIRED,
 		INVALID_INPUT;
+	}
+	
+	/**
+	 * Represents the result of a code verification, whether successful or failed.
+	 */
+	public static final class CodeVerification {
+		private final TotpResult result;
+		
+		/** If result is 'SUCCESS', or 'CLOCK_MISMATCH', holds the tick whose verification code was just verified. */
+		private final long tick;
+		
+		/** If result is 'SUCCESS' or 'CLOCK_MISMATCH', the code entered corresponds to the current time plus this number of ticks. */
+		private final long clockskew;
+		
+		CodeVerification(TotpResult result, long tick, long clockskew) {
+			this.result = result;
+			this.tick = tick;
+			this.clockskew = clockskew;
+		}
+		
+		public TotpResult getResult() {
+			return result;
+		}
+		
+		public long getTick() {
+			return tick;
+		}
+		
+		public long getClockskew() {
+			return clockskew;
+		}
+		
+		public String getClockskewAsHumanReadable() {
+			if (clockskew == 0L) return "Same time.";
+			
+			StringBuilder out = new StringBuilder();
+			int t = (int) Math.abs(clockskew);
+			int hours = t / 120;
+			t = t % 120;
+			int minutes = t / 2;
+			boolean seconds = (t % 2) != 0;
+			
+			if (hours == 1) {
+				out.append("1 hour ");
+			} else if (hours > 1) {
+				out.append(hours).append(" hours ");
+			}
+			
+			if (minutes == 1) {
+				out.append("1 minute ");
+			} else if (minutes > 1) {
+				out.append(minutes).append(" minutes ");
+			}
+			
+			if (seconds) {
+				out.append("30 seconds ");
+			}
+			
+			return out.append(clockskew < 0 ? "behind." : "ahead.").toString();
+		}
 		
 		public boolean isSuccess() {
-			return this == SUCCESS;
+			return result == TotpResult.SUCCESS;
 		}
 		
 		public boolean isLockedOut() {
-			return this == ALREADY_LOCKED_OUT || this == NOW_LOCKED_OUT;
+			return result == TotpResult.ALREADY_LOCKED_OUT || result == TotpResult.NOW_LOCKED_OUT;
 		}
 		
 		public boolean isCodeVerificationFailure() {
-			return this == CLOCK_MISMATCH_NEARBY || this == CLOCK_MISMATCH_DST || this == TotpResult.CODE_VERIFICATION_FAILURE || this == NOW_LOCKED_OUT;
+			return result == TotpResult.CLOCK_MISMATCH || result == TotpResult.CODE_VERIFICATION_FAILURE || result == TotpResult.NOW_LOCKED_OUT;
 		}
+		
+		@Override public String toString() {
+			switch (result) {
+			case CLOCK_MISMATCH: return "Clock mismatch: " + (clockskew * 30) + " seconds.";
+			case SUCCESS: return "Success (tick: " + tick + ").";
+			case ALREADY_LOCKED_OUT: return "Locked out (already).";
+			case NOW_LOCKED_OUT: return "Locked out (now).";
+			case CODE_ALREADY_USED: return "Code already used.";
+			case CODE_VERIFICATION_FAILURE: return "Incorrect code.";
+			case INVALID_INPUT: return "Invalid input.";
+			default: return "Unexpected enum type: " + result;
+			}
+		}
+	}
+	
+	private final UserStore users;
+	private final SessionStore sessions;
+	private final Crypto crypto;
+	
+	public Totp(UserStore users, SessionStore sessions, Crypto crypto) {
+		this.users = users;
+		this.sessions = sessions;
+		this.crypto = crypto;
 	}
 	
 	/**
@@ -128,18 +175,18 @@ public final class Totp {
 		return session;
 	}
 	
-	public TotpResult finishSetupTotp(Session session, String verificationCode) {
-		if (session == null) return TotpResult.SESSION_EXPIRED;
+	public CodeVerification finishSetupTotp(Session session, String verificationCode) {
+		if (session == null) throw new SessionNotFoundException("Session expired / nonexistent");
 		String secret = session.getOrDefault(SESSIONKEY_SECRET, null);
 		String username = session.getOrDefault(SESSIONKEY_USERNAME, null);
 		if (secret == null || username == null) throw new TotpException("TOTP setup process not started");
-		CodeVerification result = verifyCode(secret, verificationCode, 0L);
+		CodeVerification result = verifyCodeLax(secret, Collections.singletonList(verificationCode), 0L);
 		if (result.result == TotpResult.SUCCESS) {
 			// TODO review all these session.getOrDefaults; I'd really just rather do a getAndItNeedsToBeThere kind of call here. It should be, but bad stuff happens if this password isn't in here.
 			String password = session.getOrDefault("password", null);
 			users.createUserWithTotp(username, password.toCharArray(), secret, result.tick - 1);
 		}
-		return result.result;
+		return result;
 	}
 	
 	/**
@@ -149,30 +196,26 @@ public final class Totp {
 		return users.getTotpData(username);
 	}
 	
-	public boolean isLockedOut(TotpData data) {
-		return data.getFailureCount() >= LOCKOUT_LIMIT;
-	}
-	
 	/**
 	 * @param sessionKey A session started with {@link #startCheckTotp(String)}.
 	 */
-	public TotpResult finishCheckTotp(Session session, String verificationCode) {
-		if (session == null) throw new TotpException("Session expired / nonexistent");
+	public CodeVerification finishCheckTotp(Session session, String verificationCode) {
+		if (session == null) throw new SessionNotFoundException("Session expired / nonexistent");
 		String username = session.getOrDefault("username", null);
 		TotpData userData = users.getTotpData(username);
-		if (userData.getFailureCount() >= LOCKOUT_LIMIT) return TotpResult.ALREADY_LOCKED_OUT;
+		if (userData.isLockedOut()) return new CodeVerification(TotpResult.ALREADY_LOCKED_OUT, 0L, 0L);
 		CodeVerification result = verifyCode(userData.getSecret(), verificationCode, userData.getLastSuccessfulTick());
 		if (result.result == TotpResult.SUCCESS) {
-			users.updateLastSuccessfulTickAndClearFailureCount(username, result.tick);
-			return result.result;
+			users.updateLastSuccessfulTick(username, result.tick);
+			return result;
 		}
 		
-		if (result.result.isCodeVerificationFailure()) {
-			if (users.incrementFailureCount(username) >= LOCKOUT_LIMIT) return TotpResult.NOW_LOCKED_OUT;
-			return result.result;
+		if (result.isCodeVerificationFailure()) {
+			users.markLockedOut(username);
+			return new CodeVerification(TotpResult.NOW_LOCKED_OUT, 0L, 0L);
 		}
 		
-		return result.result;
+		return result;
 	}
 	
 	/**
@@ -180,19 +223,19 @@ public final class Totp {
 	 * 
 	 * This call will try TOTP verification even if this user has reached the lockout limit, and the lockout limit is not incremented with this call.
 	 */
-	public TotpResult finishCheckTotpForCancellingLockout(Session session, Collection<String> verificationCodes) {
+	public CodeVerification finishCheckTotpForCancellingLockout(Session session, Collection<String> verificationCodes) {
 		if (verificationCodes.size() < 3) throw new IllegalArgumentException("At least 3 codes required. 3 to 4 are suggested.");
 		if (session == null) throw new TotpException("Session expired / nonexistent");
 		
 		String username = session.getOrDefault("username", null);
 		TotpData userData = users.getTotpData(username);
-		CodeVerification result = verifyCodes(userData.getSecret(), verificationCodes, userData.getLastSuccessfulTick());
+		CodeVerification result = verifyCodeLax(userData.getSecret(), verificationCodes, userData.getLastSuccessfulTick());
 		if (result.result == TotpResult.SUCCESS) {
-			users.updateLastSuccessfulTickAndClearFailureCount(username, result.tick);
-			return result.result;
+			users.clearLockedOut(username);
+			users.updateLastSuccessfulTick(username, result.tick);
 		}
 		
-		return result.result;
+		return result;
 	}
 	
 	private static String toUri(String username, String application, String secret) {
@@ -201,59 +244,80 @@ public final class Totp {
 		return String.format("otpauth://totp/%s:%s?secret=%s&issuer=%1$s", app, user, secret);
 	}
 	
+	/**
+	 * maps 0, 1, 2, 3, 4, 5, 6, 7, ... to 0, -1, 1, -2, 2, -3, 3, ...
+	 */
+	private static long clockskewIndexToDelta(int idx) {
+		return (idx + 1) / 2 * (1 - (idx % 2) * 2);
+	}
+	
 	private CodeVerification verifyCode(String secret, String verificationCode, long lastSuccessfulTick) {
+		if (!validCodeInput(verificationCode)) {
+			return new CodeVerification(TotpResult.INVALID_INPUT, 0L, 0L);
+		}
+		
 		byte[] secretBytes = toBytes(secret);
 		long tick = System.currentTimeMillis() / KEY_VALIDATION_WINDOW;
 		
-		for (int i = 0; i < DELTAS.length; i++) {
-			long d = DELTAS[i];
-			
-			long t = tick + d;
+		for (int i = 0; i <= (ALLOWED_CLOCKSKEW * 2); i++) {
+			long delta = clockskewIndexToDelta(i);
+			long t = tick + delta;
 			if (calculateCode(secretBytes, t).equals(verificationCode)) {
-				if (t <= lastSuccessfulTick) return new CodeVerification(TotpResult.CODE_ALREADY_USED, t);
-				return new CodeVerification(ACTION[i], t);
-			}
-			if (d != 0) {
-				t = tick - d;
-				if (calculateCode(secretBytes, t).equals(verificationCode)) {
-					if (t <= lastSuccessfulTick) return new CodeVerification(TotpResult.CODE_ALREADY_USED, t);
-					return new CodeVerification(ACTION[i], t);
+				if (t <= lastSuccessfulTick) {
+					return new CodeVerification(TotpResult.CODE_ALREADY_USED, t, delta);
 				}
+				return new CodeVerification(TotpResult.SUCCESS, t, delta);
 			}
 		}
 		
-		return new CodeVerification(TotpResult.CODE_VERIFICATION_FAILURE, 0L);
+		return new CodeVerification(TotpResult.CODE_VERIFICATION_FAILURE, 0L, 0L);
 	}
 	
-	private CodeVerification verifyCodes(String secret, Collection<String> verificationCodes, long lastSuccessfulTick) {
+	private boolean validCodeInput(String in) {
+		if (in.length() != 6) return false;
+		
+		for (int i = 0; i < in.length(); i++) {
+			char c = in.charAt(i);
+			if (c < '0' || c > '9') return false;
+		}
+		
+		return true;
+	}
+	
+	private CodeVerification verifyCodeLax(String secret, Collection<String> verificationCodes, long lastSuccessfulTick) {
 		byte[] secretBytes = toBytes(secret);
 		long tick = System.currentTimeMillis() / KEY_VALIDATION_WINDOW;
+		
+		for (String code : verificationCodes) {
+			if (!validCodeInput(code)) {
+				return new CodeVerification(TotpResult.INVALID_INPUT, 0L, 0L);
+			}
+		}
 		
 		Iterator<String> it = verificationCodes.iterator();
 		String firstCode = it.next();
-		for (int i = 0; i < DELTAS.length; i++) {
-			long d = DELTAS[i];
+		
+		for (int i = 0; i <= (ALLOWED_CLOCKSKEW_LAX * 2); i++) {
+			long delta = clockskewIndexToDelta(i);
+			long t = tick + delta;
+			boolean passable = i < ALLOWED_CLOCKSKEW;
 			
-			long t = tick + d;
 			if (calculateCode(secretBytes, t).equals(firstCode)) {
-				if (t <= lastSuccessfulTick) return new CodeVerification(TotpResult.CODE_ALREADY_USED, t);
 				if (verifyFollowupCodes(secretBytes, t + 1, it)) {
-					return new CodeVerification(ACTION[i], t);
-				}
-			}
-			
-			if (d != 0) {
-				t = tick - d;
-				if (calculateCode(secretBytes, t).equals(firstCode)) {
-					if (t <= lastSuccessfulTick) return new CodeVerification(TotpResult.CODE_ALREADY_USED, t);
-					if (verifyFollowupCodes(secretBytes, t + 1, it)) {
-						return new CodeVerification(ACTION[i], t);
+					TotpResult result;
+					if (!passable) {
+						result = TotpResult.CLOCK_MISMATCH;
+					} else if (t <= lastSuccessfulTick) {
+						result = TotpResult.CODE_ALREADY_USED;
+					} else {
+						result = TotpResult.SUCCESS;
 					}
+					return new CodeVerification(result, t, delta);
 				}
 			}
 		}
 		
-		return new CodeVerification(TotpResult.CODE_VERIFICATION_FAILURE, 0L);
+		return new CodeVerification(TotpResult.CODE_VERIFICATION_FAILURE, 0L, 0L);
 	}
 	
 	private boolean verifyFollowupCodes(byte[] secretBytes, long startTick, Iterator<String> input) {

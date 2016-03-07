@@ -29,16 +29,21 @@ public interface UserStore {
 	TotpData getTotpData(String username);
 	
 	/**
-	 * Update the TOTP data for this user, clearing the failure count to zero and updating the {@code lastSuccessfulTick} field.
+	 * Update the TOTP data for this user; should only succeed if this user isn't locked out.
 	 * 
 	 * This data must be returned in the {@link #getTotpData(String)} call.
 	 */
-	void updateLastSuccessfulTickAndClearFailureCount(String username, long lastSuccessfulTick);
+	void updateLastSuccessfulTick(String username, long lastSuccessfulTick);
 	
 	/**
-	 * Update the TOTP data for this user, increasing the failure count, then returning the current value of the failure count.
+	 * Update the TOTP data for this user, marking the user as locked out (they have to go through a troubleshooting step to re-enable their account).
 	 */
-	int incrementFailureCount(String username);
+	void markLockedOut(String username);
+	
+	/**
+	 * Update the TOTP data for this user, marking the user as no longer locked out.
+	 */
+	void clearLockedOut(String username);
 	
 	/**
 	 * Create a new user in the user store.

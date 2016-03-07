@@ -1,6 +1,7 @@
 package org.projectlombok.security.totpexample.servlets;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.Cookie;
@@ -9,11 +10,12 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.projectlombok.security.totpexample.Session;
+import org.projectlombok.security.totpexample.SessionNotFoundException;
 import org.projectlombok.security.totpexample.SessionStore;
 import org.projectlombok.security.totpexample.Totp;
 import org.projectlombok.security.totpexample.TotpException;
 import org.projectlombok.security.totpexample.UserStore;
-import org.projectlombok.security.totpexample.Totp.TotpResult;
+import org.projectlombok.security.totpexample.Totp.CodeVerification;
 
 /**
  * This servlet confirms that a logging in user enters the right TOTP code and creates a long lived session to track that the device the user is accessing this page from, is now authorized as a logged in
@@ -38,67 +40,64 @@ public class ConfirmTotpLoginServlet extends HttpServlet {
 	
 	@Override protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
 		String code = request.getParameter("code");
+		String code2 = request.getParameter("code2");
+		String code3 = request.getParameter("code3");
 		String key = request.getParameter("key");
 		Session session = sessions.get(key);
-		TotpResult result;
+		CodeVerification result;
 		
 		try {
-			result = totp.finishCheckTotp(session, code);
+			if (code2 != null && code3 != null) {
+				result = totp.finishCheckTotpForCancellingLockout(session, Arrays.asList(code, code2, code3));
+			} else {
+				result = totp.finishCheckTotp(session, code);
+			}
 		} catch (TotpException e) {
 			error(response, session, e.getMessage(), true);
 			return;
+		} catch (SessionNotFoundException e) {
+			error(response, session, "The session has expired; log in again.", true);
+			return;
 		}
 		
-		String message;
-		boolean hopeless;
-		switch (result) {
+		String message = "";
+		boolean toTroubleshooting = false;
+		switch (result.getResult()) {
 		case SUCCESS:
 			String username = session.getOrDefault("username", null);
 			finishLogin(response, username);
 			return;
 		case ALREADY_LOCKED_OUT:
-			message = "Due to repeated wrong verification code entry, this account was already locked out.";
-			hopeless = true;
+			toTroubleshooting = true;
 			break;
 		case NOW_LOCKED_OUT:
-			message = "Due to repeated wrong verification code entry, this account has been locked out.";
-			hopeless = true;
+			toTroubleshooting = true;
+			break;
+		case CLOCK_MISMATCH:
+			String humanReadableOffset = result.getClockskewAsHumanReadable();
+			message = "It looks like your verification device's clock is off. Perhaps it is in the wrong timezone or you can update the Daylight Savings Time setting. Consider turning on 'automatically set time via network'. Set the clock of the device to the correct time and try again. It is off by: " + humanReadableOffset;
+			toTroubleshooting = true;
 			break;
 		case CODE_VERIFICATION_FAILURE:
 			message = "Incorrect verification code.";
-			hopeless = false;
-			break;
-		case CLOCK_MISMATCH_DST:
-			message = "It looks like your verification device is off by an hour. Perhaps it is in the wrong timezone or you can update the Daylight Savings Time setting.";
-			hopeless = false;
-			break;
-		case CLOCK_MISMATCH_NEARBY:
-			message = "It looks like your verification device is off by a few minutes. Set the clock of the device to the correct time, and consider turning on 'automatically set time via network' if available.";
-			hopeless = false;
 			break;
 		case INVALID_INPUT:
 			message = "The input should be 6 digits. Make sure to enter leading zeroes.";
-			hopeless = false;
-			break;
-		case SESSION_EXPIRED:
-			message = "The session has expired; log in again.";
-			hopeless = true;
 			break;
 		case CODE_ALREADY_USED:
 			message = "You've already logged in with this code. Wait for your verification device to show another code, then enter it.";
-			hopeless = false;
 			break;
 		default:
 			throw new ServletException("Enum not covered: " + result);
 		}
 		
-		error(response, session, message, hopeless);
+		error(response, session, message, toTroubleshooting);
 	}
 	
-	private void error(HttpServletResponse response, Session session, String message, boolean hopeless) throws IOException {
+	private void error(HttpServletResponse response, Session session, String message, boolean toTroubleshooting) throws IOException {
 		session.put("errMsg", message);
-		if (hopeless) {
-			response.sendRedirect("/login?si=" + session.getSessionKey());
+		if (toTroubleshooting) {
+			response.sendRedirect("/troubleshoot-totp?si=" + session.getSessionKey());
 		} else {
 			response.sendRedirect("/verify-totp?si=" + session.getSessionKey());
 		}

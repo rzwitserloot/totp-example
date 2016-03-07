@@ -49,7 +49,7 @@ public class DbBasedUserStore implements UserStore {
 			}
 		} else {
 			try (Statement s = connection.createStatement()) {
-				// USERSTORE+TOTPSTORE could of course be a single table (integrate columns 'LASTTICK', 'FAILCOUNT', and 'SECRET' from TOTPSTORE into USERSTORE).
+				// USERSTORE+TOTPSTORE could of course be a single table (integrate columns 'LASTTICK', 'LOCKEDOUT', and 'SECRET' from TOTPSTORE into USERSTORE).
 				// Here we use 2 tables, to show how to update an existing installation without modifying a table. This setup is also nice if you
 				// don't force every user to enable TOTP right away.
 				s.execute(
@@ -64,7 +64,7 @@ public class DbBasedUserStore implements UserStore {
 					"ID int identity, " +
 					"USERNAME varchar not null unique, " +
 					"LASTTICK bigint not null, " +
-					"FAILCOUNT int not null, " +
+					"LOCKEDOUT boolean not null, " +
 					"SECRET varchar not null, " +
 					"foreign key (USERNAME) references USERSTORE(USERNAME) on delete cascade" +
 					");");
@@ -129,13 +129,13 @@ public class DbBasedUserStore implements UserStore {
 			ensureUserTables(connection);
 			try (
 				PreparedStatement createUser = connection.prepareStatement("insert into USERSTORE (USERNAME, PASSWORDHASH) values (?, ?);");
-				PreparedStatement createTotp = connection.prepareStatement("insert into TOTPSTORE (USERNAME, SECRET, LASTTICK, FAILCOUNT) values (?, ?, ?, ?);")) {
+				PreparedStatement createTotp = connection.prepareStatement("insert into TOTPSTORE (USERNAME, SECRET, LASTTICK, LOCKEDOUT) values (?, ?, ?, ?);")) {
 				createUser.setString(1, username);
 				createUser.setString(2, crypto.hashPassword(password));
 				createTotp.setString(1, username);
 				createTotp.setString(2, secret);
 				createTotp.setLong(3, lastSuccessfulTick);
-				createTotp.setInt(4, 0);
+				createTotp.setBoolean(4, false);
 				createUser.executeUpdate();
 				createTotp.executeUpdate();
 				connection.commit();
@@ -148,11 +148,11 @@ public class DbBasedUserStore implements UserStore {
 	@Override public void enableTotp(String username, String secret, long lastSuccessfulTick) {
 		try (Connection connection = createConnection()) {
 			ensureUserTables(connection);
-			try (PreparedStatement s = connection.prepareStatement("insert into TOTPSTORE (USERNAME, SECRET, LASTTICK, FAILCOUNT) values (?, ?, ?, ?);")) {
+			try (PreparedStatement s = connection.prepareStatement("insert into TOTPSTORE (USERNAME, SECRET, LASTTICK, LOCKEDOUT) values (?, ?, ?, ?);")) {
 				s.setString(1, username);
 				s.setString(2, secret);
 				s.setLong(3, lastSuccessfulTick);
-				s.setInt(4, 0);
+				s.setBoolean(4, false);
 				s.executeUpdate();
 				connection.commit();
 			}
@@ -164,11 +164,11 @@ public class DbBasedUserStore implements UserStore {
 	@Override public TotpData getTotpData(String username) {
 		try (Connection connection = createConnection()) {
 			ensureUserTables(connection);
-			try (PreparedStatement s = connection.prepareStatement("select SECRET, FAILCOUNT, LASTTICK from TOTPSTORE where USERNAME = ?;")) {
+			try (PreparedStatement s = connection.prepareStatement("select SECRET, LOCKEDOUT, LASTTICK from TOTPSTORE where USERNAME = ?;")) {
 				s.setString(1, username);
 				try (ResultSet results = s.executeQuery()) {
 					if (!results.next()) return null;
-					TotpData out = new TotpData(results.getString(1), results.getInt(2), results.getLong(3));
+					TotpData out = new TotpData(results.getString(1), results.getBoolean(2), results.getLong(3));
 					results.close();
 					s.close();
 					connection.commit();
@@ -180,14 +180,30 @@ public class DbBasedUserStore implements UserStore {
 		}
 	}
 	
-	@Override public void updateLastSuccessfulTickAndClearFailureCount(String username, long lastSuccessfulTick) {
+	@Override public void updateLastSuccessfulTick(String username, long lastSuccessfulTick) {
 		try (Connection connection = createConnection()) {
 			ensureUserTables(connection);
-			try (PreparedStatement s = connection.prepareStatement("update TOTPSTORE set FAILCOUNT = ?, LASTTICK = ? where USERNAME = ?;")) {
-				s.setInt(1, 0);
-				s.setLong(2, lastSuccessfulTick);
-				s.setString(3, username);
-				s.executeUpdate();
+			try (PreparedStatement s = connection.prepareStatement("update TOTPSTORE set LASTTICK = ? where USERNAME = ? and not LOCKEDOUT;")) {
+				s.setLong(1, lastSuccessfulTick);
+				s.setString(2, username);
+				int upd = s.executeUpdate();
+				connection.commit();
+				if (upd == 0) {
+					throw new UserStoreException("user is locked out.");
+				}
+			}
+		} catch (SQLException e) {
+			throw new UserStoreException(e);
+		}
+	}
+	
+	@Override public void markLockedOut(String username) {
+		try (Connection connection = createConnection()) {
+			ensureUserTables(connection);
+			try (PreparedStatement write = connection.prepareStatement("update TOTPSTORE set LOCKEDOUT = ? where USERNAME = ?;")) {
+				write.setBoolean(1, true);
+				write.setString(2, username);
+				write.executeUpdate();
 				connection.commit();
 			}
 		} catch (SQLException e) {
@@ -195,28 +211,14 @@ public class DbBasedUserStore implements UserStore {
 		}
 	}
 	
-	@Override public int incrementFailureCount(String username) {
+	@Override public void clearLockedOut(String username) {
 		try (Connection connection = createConnection()) {
 			ensureUserTables(connection);
-			try (
-				PreparedStatement read = connection.prepareStatement("select FAILCOUNT from TOTPSTORE where USERNAME = ?;");
-				PreparedStatement write = connection.prepareStatement("update TOTPSTORE set FAILCOUNT = ? where USERNAME = ? and FAILCOUNT = ?;")) {
-				
-				read.setString(1, username);
+			try (PreparedStatement write = connection.prepareStatement("update TOTPSTORE set LOCKEDOUT = ? where USERNAME = ?;")) {
+				write.setBoolean(1, false);
 				write.setString(2, username);
-				int lastFailCount = -1;
-				while (true) {
-					try (ResultSet results = read.executeQuery()) {
-						if (!results.next()) throw new UserStoreException("User not found in TOTP store: " + username);
-						lastFailCount = results.getInt(1);
-					}
-					
-					write.setInt(1, lastFailCount + 1);
-					write.setInt(3, lastFailCount);
-					if (0 != write.executeUpdate()) break;
-				}
+				write.executeUpdate();
 				connection.commit();
-				return lastFailCount + 1;
 			}
 		} catch (SQLException e) {
 			throw new UserStoreException(e);

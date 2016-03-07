@@ -8,11 +8,12 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.projectlombok.security.totpexample.Session;
+import org.projectlombok.security.totpexample.SessionNotFoundException;
 import org.projectlombok.security.totpexample.SessionStore;
 import org.projectlombok.security.totpexample.Totp;
 import org.projectlombok.security.totpexample.TotpException;
 import org.projectlombok.security.totpexample.UserStore;
-import org.projectlombok.security.totpexample.Totp.TotpResult;
+import org.projectlombok.security.totpexample.Totp.CodeVerification;
 
 /**
  * This servlet confirms that a signing up user verifies that their TOTP device is giving correct codes.
@@ -43,56 +44,44 @@ public class ConfirmTotpSetupServlet extends HttpServlet {
 		String code = request.getParameter("code");
 		String key = request.getParameter("key");
 		Session session = sessions.get(key);
-		TotpResult result;
+		CodeVerification result;
 		
 		try {
 			result = totp.finishSetupTotp(session, code);
 		} catch (TotpException e) {
 			error(response, session, e.getMessage(), true);
 			return;
+		} catch (SessionNotFoundException e) {
+			error(response, session, "The session has expired; sign up again.", true);
+			return;
 		}
 		
 		String message;
 		boolean hopeless;
-		switch (result) {
+		switch (result.getResult()) {
 		case SUCCESS:
 			String username = session.getOrDefault(Totp.SESSIONKEY_USERNAME, null);
 			finishSignup(response, username);
 			return;
-		case ALREADY_LOCKED_OUT:
-			message = "Due to repeated wrong verification code entry, this account was already locked out.";
-			hopeless = true;
-			break;
-		case NOW_LOCKED_OUT:
-			message = "Due to repeated wrong verification code entry, this account has been locked out.";
-			hopeless = true;
-			break;
 		case CODE_VERIFICATION_FAILURE:
 			message = "Incorrect verification code.";
 			hopeless = false;
 			break;
-		case CLOCK_MISMATCH_DST:
-			message = "It looks like your verification device is off by an hour. Perhaps it is in the wrong timezone or you can update the Daylight Savings Time setting.";
-			hopeless = false;
-			break;
-		case CLOCK_MISMATCH_NEARBY:
-			message = "It looks like your verification device is off by a few minutes. Set the clock of the device to the correct time, and consider turning on 'automatically set time via network' if available.";
+		case CLOCK_MISMATCH:
+			String humanReadableOffset = result.getClockskewAsHumanReadable();
+			message = "It looks like your verification device's clock is off. Perhaps it is in the wrong timezone or you can update the Daylight Savings Time setting. Consider turning on 'automatically set time via network'. Set the clock of the device to the correct time and try again. It is off by: " + humanReadableOffset;
 			hopeless = false;
 			break;
 		case INVALID_INPUT:
 			message = "The input should be 6 digits. Make sure to enter leading zeroes.";
 			hopeless = false;
 			break;
-		case SESSION_EXPIRED:
-			message = "The session has expired; log in again.";
-			hopeless = true;
-			break;
 		case CODE_ALREADY_USED:
 			message = "You've already logged in with this code. Wait for your verification device to show another code, then enter it.";
 			hopeless = false;
 			break;
 		default:
-			throw new ServletException("Enum not covered: " + result);
+			throw new ServletException("Enum not covered: " + result.getResult());
 		}
 		
 		error(response, session, message, hopeless);

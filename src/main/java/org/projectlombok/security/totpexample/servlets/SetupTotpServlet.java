@@ -112,7 +112,7 @@ public class SetupTotpServlet extends HttpServlet {
 		renderPage(response, session);
 	}
 	
-	private String calculateCode(String secret, long delta) {
+	static String calculateCode(String secret, long delta) {
 		/*
 		 * We intentionally use reflection here; showing a user the correct code is not something you ever actually need or want,
 		 * therefore this API call is intentionally not public. This demo is the only time you'd want to do that.

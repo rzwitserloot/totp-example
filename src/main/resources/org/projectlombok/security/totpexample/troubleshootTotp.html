@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Troubleshoot TOTP</title>
+		<link rel="stylesheet" type="text/css" href="/css">
+	</head>
+	<body>
+		<div class="wrapper">
+			<#if errMsg??>
+				<div class="errorBox">
+					${errMsg?html}
+				</div>
+			</#if>
+			<div>
+				Due to entering a wrong TOTP confirmation code, you now need to enter 3 consecutive codes so that we can confirm you're not
+				just guessing codes, and detect issues with your verification device's clock.
+			</div>
+			<p>
+			Enter the code displayed on your device, then wait for the next code and enter that one, then wait for the third and enter that one.
+			<p>
+			<form action="/confirm-totp-login" method="POST">
+				<input name="code" placeholder="first code" /><br />
+				<input name="code2" placeholder="second code" /><br />
+				<input name="code3" placeholder="third code" /><br />
+				<input type="hidden" name="key" value="${key}">
+				<input type="submit" value="Confirm" />
+			</form>
+			<div class="demoNote">
+				You should obviously never give this in a real TOTP application, but as a demo, your phone would be telling you: <br />
+				Correct code, and the 2 following codes: <span> ${correctTotpCode}</span> <span> ${correctTotpCode2}</span> <span> ${correctTotpCode3}</span><br />
+				<br />
+				Give these a try to see what the demo app does. You can also try this sequence, which is what you'd see if the clock on your phone is way ahead:
+				wrong clock codes: <span> ${skewedTotpCode}</span> <span> ${skewedTotpCode2}</span> <span> ${skewedTotpCode3}</span><br />
+			</div>
+		</div>
+	</body>
+</html>
