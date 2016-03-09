@@ -300,7 +300,7 @@ public final class Totp {
 		for (int i = 0; i <= (ALLOWED_CLOCKSKEW_LAX * 2); i++) {
 			long delta = clockskewIndexToDelta(i);
 			long t = tick + delta;
-			boolean passable = i < ALLOWED_CLOCKSKEW;
+			boolean passable = i <= (ALLOWED_CLOCKSKEW * 2);
 			
 			if (calculateCode(secretBytes, t).equals(firstCode)) {
 				if (verifyFollowupCodes(secretBytes, t + 1, it)) {
