@@ -232,7 +232,10 @@ public final class Totp {
 		CodeVerification result = verifyCodeLax(userData.getSecret(), verificationCodes, userData.getLastSuccessfulTick());
 		if (result.result == TotpResult.SUCCESS) {
 			users.clearLockedOut(username);
-			users.updateLastSuccessfulTick(username, result.tick);
+			// The user just entered multiple codes;
+			// we have to stop accepting ALL of them,
+			// hence result.tick + codes-entered
+			users.updateLastSuccessfulTick(username, result.tick + verificationCodes.size() - 1);
 		}
 		
 		return result;
