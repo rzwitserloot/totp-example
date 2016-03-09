@@ -38,6 +38,6 @@ public class LogoutServlet extends HttpServlet {
 		
 		Session msgSession = sessions.create(DEFAULT_TIME_TO_LIVE);
 		msgSession.put("msg", "You have been logged out on all devices.");
-		response.sendRedirect("/?si=" + msgSession);
+		response.sendRedirect("/?si=" + msgSession.getSessionKey());
 	}
 }
