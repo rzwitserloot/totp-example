@@ -67,10 +67,8 @@ public class ConfirmTotpLoginServlet extends HttpServlet {
 			String username = session.getOrDefault("username", null);
 			finishLogin(response, username);
 			return;
-		case ALREADY_LOCKED_OUT:
-			toTroubleshooting = true;
-			break;
 		case NOW_LOCKED_OUT:
+		case ALREADY_LOCKED_OUT:
 			toTroubleshooting = true;
 			break;
 		case CLOCK_MISMATCH:
