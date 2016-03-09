@@ -17,7 +17,7 @@
 			Enter the code displayed on your device to confirm the setup.
 			<p>
 			<form class="midPageForm" action="/confirm-totp-setup" method="POST">
-				<input name="code" placeholder="code" /><br />
+				<input name="code" autocomplete="off" placeholder="code" /><br />
 				<input type="hidden" name="key" value="${key}">
 				<input type="submit" value="Confirm" />
 			</form>

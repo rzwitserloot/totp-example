@@ -19,9 +19,9 @@
 			Enter the code displayed on your device, then wait for the next code and enter that one, then wait for the third and enter that one.
 			<p>
 			<form action="/confirm-totp-login" method="POST">
-				<input name="code" placeholder="first code" /><br />
-				<input name="code2" placeholder="second code" /><br />
-				<input name="code3" placeholder="third code" /><br />
+				<input name="code" autocomplete="off" placeholder="first code" /><br />
+				<input name="code2" autocomplete="off" placeholder="second code" /><br />
+				<input name="code3" autocomplete="off" placeholder="third code" /><br />
 				<input type="hidden" name="key" value="${key}">
 				<input type="submit" value="Confirm" />
 			</form>
