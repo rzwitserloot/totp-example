@@ -47,7 +47,7 @@ public class VerifyTotpServlet extends HttpServlet {
 	 * GET calls to this servlet normally only occur when the TOTP verification fails and the user is redirected back.
 	 */
 	@Override protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-		String sessionKey = request.getParameter("si")
+		String sessionKey = request.getParameter("si");
 		Session session = sessions.get(sessionKey);
 		String username = "";
 		if (session != null) {
