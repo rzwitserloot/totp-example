@@ -77,7 +77,7 @@ public class ConfirmTotpSetupServlet extends HttpServlet {
 			hopeless = false;
 			break;
 		case CODE_ALREADY_USED:
-			message = "You've already logged in with this code. Wait for your verification device to show another code, then enter it.";
+			message = "You've already confirmed with this code. Wait for your verification device to show another code, then enter it.";
 			hopeless = false;
 			break;
 		default:
