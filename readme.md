@@ -1,4 +1,4 @@
-# Examples from the Talk *To ToTP or not to ToTP*
+# Examples from the Talk *ToTP or not ToTP*
 
 This web application demonstrates how to add multi-factor authentication to your web login/signup systems, based on the Time-based One Time Password standard (TOTP).
 
