@@ -10,10 +10,10 @@
 	<url>http://projectlombok.org/totp-example</url>
 	
 	<properties>
-		<zxing.version>3.2.1</zxing.version>
-		<jetty.version>9.3.7.v20160115</jetty.version>
-		<h2.version>1.4.191</h2.version>
-		<freemarker.version>2.3.23</freemarker.version>
+		<zxing.version>3.4</zxing.version>
+		<jetty.version>9.4.22.v20191022</jetty.version>
+		<h2.version>1.4.200</h2.version>
+		<freemarker.version>2.3.29</freemarker.version>
 		<java.target>1.8</java.target>
 	</properties>
 	
