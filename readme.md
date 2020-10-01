@@ -2,7 +2,7 @@
 
 This web application demonstrates how to add multi-factor authentication to your web login/signup systems, based on the Time-based One Time Password standard (TOTP).
 
-# TOTP Explantion and need of implementation* 
+# TOTP Explantion and need of implementation 
 Explain-
 {If your website features a username+password authentication system, you owe it 
 to your users to offer 2-factor authentication (or 2fa for short) as an additional
